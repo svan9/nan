@@ -24,7 +24,7 @@ typedef std::vector<Token>::iterator iterator;
 private:
 	std::vector<Token> tokens;
 	std::string::const_iterator it;
-	std::string::const_iterator end;
+	std::string::const_iterator _end;
 	bool after_space = false;
 public:
 	////////////////////////////////////////////////////////////
@@ -62,7 +62,7 @@ public:
 
 	////////////////////////////////////////////////////////////
 	void lex_space() {
-		while (it != end && is_lex_type(SPACE, *it)) {
+		while (it != _end && is_lex_type(SPACE, *it)) {
 			it++; // just skip
 		}
 		after_space = true;
@@ -81,7 +81,7 @@ public:
 	////////////////////////////////////////////////////////////
 	void lex_string() {
 		std::string str;
-		while (it != end && 
+		while (it != _end && 
 			!is_lex_type(STRING, *it) &&
 			*(it-1) != '\\'
 		) {
@@ -95,7 +95,7 @@ public:
 	////////////////////////////////////////////////////////////
 	void lex_text() {
 		std::string str;
-		while (it != end && 
+		while (it != _end && 
 			!is_lex_type(SPECIAL, *it) &&
 			!is_lex_type(SPACE, *it)
 		) {
@@ -109,8 +109,8 @@ public:
 	////////////////////////////////////////////////////////////
 	void lex(const std::string& string) {
 		it = string.begin();
-		end = string.end();
-		while (it != end) {
+		_end = string.end();
+		while (it != _end) {
 			char c = *(it++);
 			if (is_lex_type(SPACE, c))
 				lex_space();
