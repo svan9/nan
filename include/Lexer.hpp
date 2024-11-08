@@ -1,155 +1,160 @@
-#ifndef __LEXER__NAN__
-#define __LEXER__NAN__
+#ifndef _NAN_LEXER_IMPL
+#define _NAN_LEXER_IMPL
 
-#include <Token.hpp>
-#include <Config.hpp>
-#include <string>
 #include <vector>
+#include "config.h"
+#include "grammar.hpp"
 
-class Lexer {
-public:
-	enum TokenTypes:
-		short {
-			SEMICOLON, COLON, NUMBER, STRING, TEXT, 
-			OPEN_SQ, /*[*/ CLOSE_SQ, /*]*/
-			OPEN_RN, /*(*/ CLOSE_RN, /*)*/
-			OPEN_TR, /*<*/ CLOSE_TR, /*>*/
-			OPEN_FG, /*{*/ CLOSE_FG, /*}*/
-			DOT, COMMA, GRID, PERCENT, UP,
-			ATSIGN, EM, QM, EQUAL, PLUS,
-			MINUS, AND, OR, SLASH, BSLASH,
-			STAR, DL, AP, SQUOTE,
+namespace Lexer {
+	struct Lexer {
+		const char* source;
+		StringIterator sit;
+		std::vector<Token::Token> tokens;
 	};
-typedef std::vector<Token>::iterator iterator;
-private:
-	std::vector<Token> tokens;
-	std::string::const_iterator it;
-	std::string::const_iterator _end;
-	bool after_space = false;
-public:
-	////////////////////////////////////////////////////////////
-	Lexer() { }
 
-	////////////////////////////////////////////////////////////
-	void append(short type, std::string& value) {
-		Token tk(type, value);
-		tk.after_space(after_space);
-		tokens.push_back(tk);
+#pragma region TOKENIZE
+
+	#define cmp_string(f, a, b) (strlen(a) == b && memcmp(f, a, b))
+
+	bool CheckKeyWords(Lexer& lexer) {
+		size_t before_space =
+			CountRightBefore(lexer.sit.begin, " \n\r\v\b\t");
+		if (cmp_string(lexer.sit.begin, "entry", before_space)) {
+			lexer.tokens.push_back({Token::Token_Entry});
+		} else 
+		if (cmp_string(lexer.sit.begin, "use", before_space)) {
+			lexer.tokens.push_back({Token::Token_Use});
+		} else 
+		if (cmp_string(lexer.sit.begin, "ret", before_space)) {
+			lexer.tokens.push_back({Token::Token_Ret});
+		} else 
+		if (cmp_string(lexer.sit.begin, "class", before_space)) {
+			lexer.tokens.push_back({Token::Token_Class});
+		} else 
+		if (cmp_string(lexer.sit.begin, "for", before_space)) {
+			lexer.tokens.push_back({Token::Token_For});
+		} else 
+		if (cmp_string(lexer.sit.begin, "while", before_space)) {
+			lexer.tokens.push_back({Token::Token_While});
+		} else 
+		if (cmp_string(lexer.sit.begin, "interface", before_space)) {
+			lexer.tokens.push_back({Token::Token_Interface});
+		} else 
+		if (cmp_string(lexer.sit.begin, "struct", before_space)) {
+			lexer.tokens.push_back({Token::Token_Struct});
+		} else 
+		if (cmp_string(lexer.sit.begin, "static", before_space)) {
+			lexer.tokens.push_back({Token::Token_Static});
+		} else 
+		if (cmp_string(lexer.sit.begin, "expand", before_space)) {
+			lexer.tokens.push_back({Token::Token_Expand});
+		} else 
+		if (cmp_string(lexer.sit.begin, "narrow", before_space)) {
+			lexer.tokens.push_back({Token::Token_Narrow});
+		} else 
+		if (cmp_string(lexer.sit.begin, "extern", before_space)) {
+			lexer.tokens.push_back({Token::Token_Extern});
+		} else 
+		if (cmp_string(lexer.sit.begin, "char", before_space)) {
+			lexer.tokens.push_back({Token::Token_Char});
+		} else 
+		if (cmp_string(lexer.sit.begin, "float", before_space)) {
+			lexer.tokens.push_back({Token::Token_Float});
+		} else 
+		if (cmp_string(lexer.sit.begin, "double", before_space)) {
+			lexer.tokens.push_back({Token::Token_Double});
+		} else 
+		if (cmp_string(lexer.sit.begin, "int", before_space)) {
+			lexer.tokens.push_back({Token::Token_Integer});
+		} else 
+		if (cmp_string(lexer.sit.begin, "unsigned", before_space)) {
+			lexer.tokens.push_back({Token::Token_Unsigned});
+		} else 
+		if (cmp_string(lexer.sit.begin, "short", before_space)) {
+			lexer.tokens.push_back({Token::Token_Short});
+		} else 
+		if (cmp_string(lexer.sit.begin, "string", before_space)) {
+			lexer.tokens.push_back({Token::Token_String});
+		} else 
+		if (cmp_string(lexer.sit.begin, "let", before_space)) {
+			lexer.tokens.push_back({Token::Token_Let});
+		} else 
+		if (cmp_string(lexer.sit.begin, "const", before_space)) {
+			lexer.tokens.push_back({Token::Token_Const});
+		} else 
+		if (cmp_string(lexer.sit.begin, "void", before_space)) {
+			lexer.tokens.push_back({Token::Token_Void});
+		} else 
+		{return false;}
+		return true;
 	}
 
-	////////////////////////////////////////////////////////////
-	void append(TokenTypes type, std::string& value) {
-		Token tk(static_cast<short>(type), value);
-		tk.after_space(after_space);
-		tokens.push_back(tk);
-	}
+	#define PUSH_SINGLE_TOKEN(cr, _token) case cr: lexer.tokens.push_back({_token}); break;
+	#define SKIP_SINGLE_TOKEN(cr) case cr: break;
 
-	////////////////////////////////////////////////////////////
-	void append(TokenTypes type, char value) {
-		std::string str;
-		str+=value;
-		Token tk(static_cast<short>(type), str);
-		tk.after_space(after_space);
-		tokens.push_back(tk);
-	}
-
-	////////////////////////////////////////////////////////////
-	void append(TokenTypes type) {
-		Token tk(static_cast<short>(type));
-		tk.after_space(after_space);
-		tokens.push_back(tk);
-	}
-
-	////////////////////////////////////////////////////////////
-	void lex_space() {
-		while (it != _end && is_lex_type(SPACE, *it)) {
-			it++; // just skip
+	void Tokenize(Lexer& lexer, const char* source) {
+		lexer.source = source;
+		lexer.sit = StringIterator(source);
+		while (!lexer.sit.IsEnd()) {
+			char symbol = *(lexer.sit++);
+			switch (symbol) {
+				PUSH_SINGLE_TOKEN('0', Token::Token_Zero);
+				PUSH_SINGLE_TOKEN('1', Token::Token_One);
+				PUSH_SINGLE_TOKEN('2', Token::Token_Two);
+				PUSH_SINGLE_TOKEN('3', Token::Token_Three);
+				PUSH_SINGLE_TOKEN('4', Token::Token_Four);
+				PUSH_SINGLE_TOKEN('5', Token::Token_Five);
+				PUSH_SINGLE_TOKEN('6', Token::Token_Six);
+				PUSH_SINGLE_TOKEN('7', Token::Token_Seven);
+				PUSH_SINGLE_TOKEN('8', Token::Token_Eight);
+				PUSH_SINGLE_TOKEN('9', Token::Token_Nine);
+				PUSH_SINGLE_TOKEN('.', Token::Token_Dot);
+				PUSH_SINGLE_TOKEN(',', Token::Token_Comma);
+				PUSH_SINGLE_TOKEN('*', Token::Token_Star);
+				PUSH_SINGLE_TOKEN('#', Token::Token_Sharp);
+				PUSH_SINGLE_TOKEN(';', Token::Token_Semicolon);
+				PUSH_SINGLE_TOKEN(':', Token::Token_Colon);
+				PUSH_SINGLE_TOKEN('\'', Token::Token_SingleQuote);
+				PUSH_SINGLE_TOKEN('\"', Token::Token_DoubleQuote);
+				PUSH_SINGLE_TOKEN('`', Token::Token_ApostropheQuote);
+				PUSH_SINGLE_TOKEN('=', Token::Token_Equal);
+				PUSH_SINGLE_TOKEN('-', Token::Token_Minus);
+				PUSH_SINGLE_TOKEN('/', Token::Token_Slash);
+				PUSH_SINGLE_TOKEN('\\', Token::Token_BackSlash);
+				PUSH_SINGLE_TOKEN('|', Token::Token_Split);
+				PUSH_SINGLE_TOKEN('_', Token::Token_Underscore);
+				PUSH_SINGLE_TOKEN('&', Token::Token_Ampersand);
+				PUSH_SINGLE_TOKEN('$', Token::Token_Dollar);
+				PUSH_SINGLE_TOKEN('%', Token::Token_Percent);
+				PUSH_SINGLE_TOKEN('@', Token::Token_At);
+				PUSH_SINGLE_TOKEN('!', Token::Token_Exclamate);
+				PUSH_SINGLE_TOKEN('?', Token::Token_Question);
+				PUSH_SINGLE_TOKEN('~', Token::Token_Tilda);
+				PUSH_SINGLE_TOKEN('^', Token::Token_ArrowUp);
+				PUSH_SINGLE_TOKEN('<', Token::Token_ArrowOpen);
+				PUSH_SINGLE_TOKEN('>', Token::Token_ArrowClose);
+				PUSH_SINGLE_TOKEN('(', Token::Token_RoundOpen);
+				PUSH_SINGLE_TOKEN(')', Token::Token_RoundClose);
+				PUSH_SINGLE_TOKEN('[', Token::Token_SquareOpen);
+				PUSH_SINGLE_TOKEN(']', Token::Token_SquareClose);
+				PUSH_SINGLE_TOKEN('{', Token::Token_FigureOpen);
+				PUSH_SINGLE_TOKEN('}', Token::Token_FigureClose);
+				SKIP_SINGLE_TOKEN(' ');
+				SKIP_SINGLE_TOKEN('\t');
+				SKIP_SINGLE_TOKEN('\r');
+				SKIP_SINGLE_TOKEN('\b');
+				SKIP_SINGLE_TOKEN('\n');
+				default:
+					if (!CheckKeyWords(lexer)) {
+						lexer.tokens.push_back({Token::Token_Text}); 
+					}
+				break;
+			}
 		}
-		after_space = true;
 	}
-
-	////////////////////////////////////////////////////////////
-	constexpr iterator begin() noexcept {
-		return tokens.begin();
-	}
-
-	////////////////////////////////////////////////////////////
-	constexpr iterator end() noexcept {
-		return tokens.end();
-	}
+#pragma endregion TOKENIZE
 	
-	////////////////////////////////////////////////////////////
-	void lex_string() {
-		std::string str;
-		while (it != _end && 
-			!is_lex_type(STRING, *it) &&
-			*(it-1) != '\\'
-		) {
-			if (*(it) == '\\') { it++; }
-			else { str += *(it++); }
-		}
-		append(STRING, str);
-		after_space = false;
-	}
-
-	////////////////////////////////////////////////////////////
-	void lex_text() {
-		std::string str;
-		while (it != _end && 
-			!is_lex_type(SPECIAL, *it) &&
-			!is_lex_type(SPACE, *it)
-		) {
-			str += *(it++);
-		}
-		append(TEXT, str);
-		after_space = false;
-	}
-
-
-	////////////////////////////////////////////////////////////
-	void lex(const std::string& string) {
-		it = string.begin();
-		_end = string.end();
-		while (it != _end) {
-			char c = *(it++);
-			if (is_lex_type(SPACE, c))
-				lex_space();
-			else
-			if (is_lex_type(STRING, c)) 		// "(~(")*)"
-				lex_string();
-			else lexer_ifis(SEMICOLON, c) 	// ;
-			else lexer_ifis(COLON, c) 			// :
-			else lexer_ifis(OPEN_SQ, c)			// [
-			else lexer_ifis(OPEN_RN, c)			// (
-			else lexer_ifis(OPEN_TR, c)			// <
-			else lexer_ifis(OPEN_FG, c)			// {
-			else lexer_ifis(CLOSE_SQ, c)		// ]
-			else lexer_ifis(CLOSE_RN, c)		// )
-			else lexer_ifis(CLOSE_TR, c)		// >
-			else lexer_ifis(CLOSE_FG, c)		// }
-			else lexer_ifis(DOT, c)					// .
-			else lexer_ifis(COMMA, c)				// ,
-			else lexer_ifis(GRID, c)				// #
-			else lexer_ifis(PERCENT, c)			// %
-			else lexer_ifis(UP, c)					// ^
-			else lexer_ifis(ATSIGN, c)			// @
-			else lexer_ifis(EM, c)					// !
-			else lexer_ifis(QM, c)					// ?
-			else lexer_ifis(EQUAL, c)				// =
-			else lexer_ifis(PLUS, c)				// +
-			else lexer_ifis(MINUS, c)				// -
-			else lexer_ifis(AND, c)					// &
-			else lexer_ifis(OR, c)					// |
-			else lexer_ifis(SLASH, c)				// "\"
-			else lexer_ifis(BSLASH, c)			// /
-			else lexer_ifis(STAR, c)				// *
-			else lexer_ifis(DL, c)					// $
-			else lexer_ifis(AP, c)					// `
-			else lexer_ifis(SQUOTE, c)			// '
-			else lex_text();
-		}
-	}
-
-};
+	
+}
 
 #endif

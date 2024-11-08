@@ -1,0 +1,61 @@
+////////////////////////////////////
+//        file 'write.nan'        //
+////////////////////////////////////
+
+// create named type
+type CONST_STREAM = int*;
+
+// get native funcs & constains 
+extern void putc(char, CONST_STREAM) @native;
+extern const CONST_STREAM STROUT_STREAM @native;
+extern const char ENDL @native;
+
+// add or create class std
+expand class std;
+// add or create class console
+expand class console;
+
+void write(char c) { // -> write_char 
+	putc(c, STROUT_STREAM);
+}
+
+void write(string str) { // -> write_string
+	for (char c: str) {
+		write(c);
+	}
+}
+
+void write(...string strs) { // -> write_array__string
+// 				 ^^^ multi arguments
+// store va_args
+	for (string str: strs) {
+		write(str);
+	}
+}
+
+// define interface
+interface	Serializable {
+// method
+	string toString();
+}
+
+void write(Serializable obj) { // write_Serializable
+	string str = obj.toString();
+	write(str);
+}
+
+void write(...Serializable objs) { // write_array__Serializable
+	for (Serializable s: objs) {
+		write(s);
+	}
+}
+
+void print(...Serializable objs) { // print_array__Serializable
+	write(objs);
+	write(ENDL);
+}
+
+// close console class
+narrow console;
+
+static const char endl = "\n";

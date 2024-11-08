@@ -1,0 +1,7 @@
+//| declare 'tip' words:
+//| type         - declared type 
+//| var          - declared variable
+//| #<literals>  - declaration literals var 
+//| Array        - array token type '(...)'
+tip { "..." type } -> Array< type >;
+tip HELLOW { 'hellow' STRING } -> println("Hellow, " .. STRING)

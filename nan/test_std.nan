@@ -1,0 +1,33 @@
+////////////////////////////////////
+//        file 'test.nan'         //
+////////////////////////////////////
+
+// include file-module 'write.nan'
+use write;
+// get from native lib function 'randf'
+extern float randf() @native;
+
+// foo function with return type for handling errores
+// with packed value type 'float'
+Result <float, err> foo() {
+// get ranom float number [0, 1]
+	float number = randf();
+	if (number > 0.5) {
+// retun Error
+		ret Error("something wrong");
+	}
+// return 'ok' result with packed value
+	ret OK(number);
+}
+
+// entry of program
+entry(int argc, string[] argv) -> Result {
+// call function
+	std::console::print("hellow");
+// call foo with unwrap result
+// if return error - stops program and return current error
+// ^^^^ method 'unwrap' ^^^^
+	let some = foo().unwrap(); 
+// return 'ok' result
+	ret OK();
+}
