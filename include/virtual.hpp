@@ -5,6 +5,8 @@
 #include "mewlib.h"
 #include <stack>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 
 /*
 Reference
@@ -72,6 +74,65 @@ namespace Virtual {
     size_t data_size = 0;
     byte* data = nullptr;
   };
+ 
+  void Code_SaveFromFile(const Code& code, const std::filesystem::path& path) {
+    std::ofstream file(path, std::ios::out | std::ios::binary);
+    MewAssert(file.is_open());
+    file.seekp(std::ios::beg);
+    file << code.capacity;
+    for (int i = 0; i < code.capacity; i++) {
+      file << ((byte*)code.playground)[i];
+    }
+    file << code.data_size;
+    for (int i = 0; i < code.data_size; i++) {
+      file << ((byte*)code.data)[i];
+    }
+    file.close();
+  }
+
+  void Code_SaveFromFile(const Code& code, const wchar_t* path) {
+    std::filesystem::path __path(path);
+    __path = std::filesystem::absolute(__path.lexically_normal());
+    Code_SaveFromFile(code, __path);
+  }
+  void Code_SaveFromFile(const Code& code, const char* path) {
+    std::filesystem::path __path(path);
+    __path = std::filesystem::absolute(__path.lexically_normal());
+    Code_SaveFromFile(code, __path);
+  }
+
+  Code* Code_LoadFromFile(const std::filesystem::path& path) {
+    std::ifstream file(path, std::ios::in | std::ios::binary);
+    MewAssert(file.is_open());
+    file.seekg(std::ios::beg);
+    file >> std::noskipws;
+    Code* code = new Code();
+    file >> code->capacity;
+    code->playground = new Instruction[code->capacity];
+    for (int i = 0; i < code->capacity; i++) {
+      file >> ((byte*)code->playground)[i];
+    }
+    file >> code->data_size;
+    code->data = new byte[code->data_size];
+    for (int i = 0; i < code->data_size; i++) {
+      file >> ((byte*)code->data)[i];
+    }
+
+    file.close();
+    return code;
+  }
+
+  [[deprecated]]
+  Code* Code_LoadFromFile(const wchar_t* path) {
+    std::filesystem::path __path(path);
+    __path = std::filesystem::absolute(__path.lexically_normal());
+    return Code_LoadFromFile(__path);
+  }
+  Code* Code_LoadFromFile(const char* path) {
+    std::filesystem::path __path(path);
+    __path = std::filesystem::absolute(__path.lexically_normal());
+    return Code_LoadFromFile(__path);
+  }
 
   enum VM_Status: byte {
     VM_Status_Panding = 0,
@@ -451,7 +512,18 @@ namespace Virtual {
     LoadMemory(vm, code);
     Run(vm, code);
   }
-  
+
+  void Execute(const wchar_t* path) {
+    Code* code = Code_LoadFromFile(path);
+    Execute(*code);
+  }
+
+  void Execute(const char* path) {
+    Code* code = Code_LoadFromFile(path);
+    Execute(*code);
+  }
+
+
   template<size_t alloc_size = 8>
   class CodeBuilder {
   private:
@@ -566,12 +638,13 @@ namespace Tests {
     CodeBuilder builder;
     builder << Instruction_PUTS;
     builder << 0U;
-    builder++; // or builder.Enter();
+    builder++;
     builder << Instruction_RET;
-    builder++; // or builder.Enter();
+    builder++;
     builder += L"hellow, word";
     Code* code = *builder;
-    Execute(*code);
+    Code_SaveFromFile(*code, "./hellow_word.nb");
+    Execute("./hellow_word.nb");
   }
 }
 
