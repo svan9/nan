@@ -12,7 +12,7 @@ const char* executable_name() {
 #if defined(PLATFORM_POSIX) || defined(__linux__) //check defines for your setup
 	std::string sp;
 	std::ifstream("/proc/self/comm") >> sp;
-	return sp;
+	return sp.c_str();
 
 #elif defined(_WIN32)
 	char* buf = new char[MAX_PATH];
