@@ -1,4 +1,5 @@
 #include <iostream>
+#include "mewlib.h"
 #include "virtual.hpp"
 #if defined(_WIN32)
 
@@ -6,7 +7,6 @@
 #include <libloaderapi.h>
 
 #endif
-
 
 const char* executable_name() {
 #if defined(PLATFORM_POSIX) || defined(__linux__) //check defines for your setup
@@ -20,7 +20,7 @@ const char* executable_name() {
 	return buf;
 
 #else
-	static_assert(false, "unrecognized platform");
+	MewUserAssert(false, "unrecognized platform");
 #endif
 }
 
@@ -38,8 +38,18 @@ char** SkipToExec(int argc, char** args) {
 	return nullptr;
 }
 
+// #include <stdafx.h>
+#include <iostream>
+using namespace std;
+#if       _WIN32_WINNT < 0x0500
+  #undef  _WIN32_WINNT
+  #define _WIN32_WINNT   0x0500
+#endif
+#include <windows.h>
+#include "Wincon.h"
+
 int main(int argc, char** argv) {
-	if (argc < 2) {
+		if (argc < 2) {
 		printf("Usage:\n");
 		printf("> ./nanvm <path/to/file>");
 		exit(1);
@@ -47,5 +57,13 @@ int main(int argc, char** argv) {
 	const char** real_args = (const char**)SkipToExec(argc, argv);
 	const char* path = real_args[0];
 	Virtual::Execute(path);
+
+	HWND consoleWnd = GetConsoleWindow();
+	DWORD dwProcessId;
+	GetWindowThreadProcessId(consoleWnd, &dwProcessId);
+	if (GetCurrentProcessId()==dwProcessId) {
+		printf("\n");
+		system("pause");
+	}	
 	return 0;
 }

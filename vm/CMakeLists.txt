@@ -11,6 +11,21 @@ add_compile_options(-fconcepts)
 add_compile_options(-fpermissive)
 
 aux_source_directory("./" SOURCE)
-
 add_executable(${PROJECT_NAME} ${SOURCE})
 target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_SOURCE_DIR}/include")
+set_target_properties(${PROJECT_NAME} PROPERTIES COMMON_LANGUAGE_RUNTIME "")
+if(RELEASE) 
+  target_link_libraries(${PROJECT_NAME} -static-libgcc -static-libstdc++ -O3 -static -pthread)	
+endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_compile_definitions(${PROJECT_NAME} PUBLIC "LINUX_OS")
+endif()
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  target_compile_definitions(${PROJECT_NAME} PUBLIC "MACOS_OS")
+endif()
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  target_compile_definitions(${PROJECT_NAME} PUBLIC "WINDOWS_OS")
+endif()
+
+install(TARGETS ${PROJECT_NAME})

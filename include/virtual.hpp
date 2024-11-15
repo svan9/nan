@@ -61,10 +61,12 @@ namespace Virtual {
     Instruction_JE,
     Instruction_JEL,
     Instruction_JEM,
+    Instruction_JNE,
     Instruction_JL,
     Instruction_JM,
     Instruction_MOV,  // replace head data from stack to memory
     Instruction_PUTC,
+    Instruction_PUTI,
     Instruction_PUTS,
   };
 
@@ -90,6 +92,7 @@ namespace Virtual {
     file.close();
   }
 
+  [[deprecated]]
   void Code_SaveFromFile(const Code& code, const wchar_t* path) {
     std::filesystem::path __path(path);
     __path = std::filesystem::absolute(__path.lexically_normal());
@@ -97,7 +100,9 @@ namespace Virtual {
   }
   void Code_SaveFromFile(const Code& code, const char* path) {
     std::filesystem::path __path(path);
-    __path = std::filesystem::absolute(__path.lexically_normal());
+    if (!__path.is_absolute()) {
+      __path = std::filesystem::absolute(__path.lexically_normal());
+    }
     Code_SaveFromFile(code, __path);
   }
 
@@ -128,9 +133,12 @@ namespace Virtual {
     __path = std::filesystem::absolute(__path.lexically_normal());
     return Code_LoadFromFile(__path);
   }
+
   Code* Code_LoadFromFile(const char* path) {
     std::filesystem::path __path(path);
-    __path = std::filesystem::absolute(__path.lexically_normal());
+    if (!__path.is_absolute()) {
+      __path = std::filesystem::absolute(__path.lexically_normal());
+    }
     return Code_LoadFromFile(__path);
   }
 
@@ -158,8 +166,12 @@ namespace Virtual {
     byte test;
     byte status;
   };
+
   #ifndef VM_ALLOC_ALIGN
     #define VM_ALLOC_ALIGN 512
+  #endif
+  #ifndef VM_MINHEAP_ALIGN
+    #define VM_MINHEAP_ALIGN 128
   #endif
   #ifndef VM_CODE_ALIGN
     #define VM_CODE_ALIGN 8
@@ -177,9 +189,9 @@ namespace Virtual {
 
   void Alloc(VirtualMachine& vm, Code& code) {
     size_t size = __VM_ALIGN(code.capacity+code.data_size, VM_ALLOC_ALIGN);
-    // if (vm.memory) {
-    // 	free(vm.memory);
-    // }
+    if ((size - code.capacity - code.data_size) <= 0) {
+      size += VM_MINHEAP_ALIGN;
+    }
     vm.memory = new byte[size];
     memset(vm.memory, Instruction_NONE, size);
     vm.capacity = size;
@@ -379,6 +391,13 @@ namespace Virtual {
       VM_ManualJmp(vm, offset);
     }
   }
+  void VM_JNE(VirtualMachine& vm, byte* line) {
+    int offset; 
+    memcpy(&offset, line+1, sizeof(int));
+    if (vm.test != VM_TestStatus_Equal) {
+      VM_ManualJmp(vm, offset);
+    }
+  }
 
   void VM_Mov(VirtualMachine& vm, byte* line) {
     uint x; 
@@ -394,6 +413,15 @@ namespace Virtual {
     wchar_t long_char;
     memcpy(&long_char, line+1, sizeof(wchar_t));
     putwchar(long_char);
+  }
+  
+  void VM_Puti(VirtualMachine& vm, byte* line) {
+    int x; 
+    VM_StackTop(vm, line[1], (uint*)&x);
+    char str[12] = {0};
+    itoa(x, str, 10);
+    puts(str);
+    free(str);
   }
 
   void VM_Puts(VirtualMachine& vm, byte* line) {
@@ -468,11 +496,17 @@ namespace Virtual {
       case Instruction_JM: {
         VM_JM(vm, line);
       } break;
+      case Instruction_JNE: {
+        VM_JNE(vm, line);
+      } break;
       case Instruction_MOV: {
         VM_Mov(vm, line);
       } break;
       case Instruction_PUTC: {
         VM_Putc(vm, line);
+      } break;
+      case Instruction_PUTI: {
+        VM_Puti(vm, line);
       } break;
       case Instruction_PUTS: {
         VM_Puts(vm, line);
@@ -524,10 +558,12 @@ namespace Virtual {
   }
 
 
-  template<size_t alloc_size = 8>
+  // template<size_t alloc_size = 8>
   class CodeBuilder {
+  public:
+    static const size_t alloc_size = 8;
   private:
-    size_t capacity, size;
+    size_t capacity, size, code_cursor = 0;
     byte* code;
     size_t data_size = 0;
     byte* data = nullptr;
@@ -537,25 +573,63 @@ namespace Virtual {
     CodeBuilder(): capacity(alloc_size), size(0), 
       code(new byte[alloc_size]) { memset(line, 0, alloc_size); memset(code, 0, alloc_size); }
 
-    void Upsize() {
-      byte* __new_code = new byte[capacity+alloc_size];
+    size_t code_size() const noexcept {
+      return size;
+    }
+
+    void Upsize(size_t _size = alloc_size) {
+      byte* __new_code = new byte[capacity+_size];
       memset(__new_code, 0, capacity);
       memcpy(__new_code, code, capacity);
-      capacity += alloc_size;
-      byte* __old_code = code; 
+      capacity += _size;
+      byte* __old_code = code;
       code = __new_code;
       free(__old_code);
     }
 
     void Enter() {
+      /* skip */
+      if (cursor == 0) { return; }
       Upsize();
       memcpy(code+size, line, alloc_size);
       memset(line, 0, alloc_size);
       size += alloc_size;
       cursor = 0;
+      code_cursor++;
     }
 
+    size_t Rows() {
+      return size/alloc_size;
+    }
+
+    void ShiftCursor(int offset) {
+      code_cursor += offset;
+      code_cursor = code_cursor % (size+1);
+      code_cursor = code_cursor < 0? 0: code_cursor;
+      code += code_cursor*alloc_size;
+    }
+    void ResetCursor(int offset) {
+      code -= size - (code_cursor*alloc_size);
+      code_cursor = size/alloc_size;
+    }
     
+    friend CodeBuilder& operator+(CodeBuilder& cb, const CodeBuilder& i) {
+      size_t __size = i.data_size;
+      size_t __rsize = __size;
+      if (!cb.data) {
+        cb.data = new byte[__rsize];
+      } else {
+        byte* __new = new byte[cb.data_size+__rsize];
+        memcpy(__new, cb.data, cb.data_size);
+        byte* __old = cb.data; 
+        cb.data = __new;
+        free(__old);
+      }
+      memset(cb.data+cb.data_size, 0, __rsize);
+      memcpy(cb.data+cb.data_size, i.data, __rsize);
+      cb.data_size += __rsize;
+      return cb;
+    }
     friend CodeBuilder& operator+(CodeBuilder& cb, const wchar_t* text) {
       size_t __size = wcslen(text);
       size_t __rsize = (__size+1)*sizeof(wchar_t);
@@ -577,10 +651,22 @@ namespace Virtual {
     CodeBuilder& operator+=(const wchar_t* text) {
       return (*this)+text;
     }
+    CodeBuilder& operator+=(CodeBuilder& i) {
+      return (*this)+i;
+    }
     
+    friend CodeBuilder& operator<<(CodeBuilder& cb, CodeBuilder& i) {
+      cb.Enter();
+      cb.Upsize(i.capacity);
+      memcpy(cb.code+cb.size, i.code, i.capacity);
+      cb.size += i.capacity;
+      cb += i;
+      return cb;
+    } 
+
     friend CodeBuilder& operator<<(CodeBuilder& cb, byte i) {
       if (cb.cursor+1 >= alloc_size) {
-        Enter();
+        cb.Enter();
       }
       cb.line[cb.cursor++] = i;
       return cb;
@@ -602,7 +688,7 @@ namespace Virtual {
     } 
     friend CodeBuilder& operator<<(CodeBuilder& cb, int i) {
       if (cb.cursor+sizeof(i) >= alloc_size) {
-        Enter();
+        cb.Enter();
       }
       memcpy(cb.line+cb.cursor+1, &i, sizeof(i));
       cb.cursor += sizeof(i); 
@@ -625,7 +711,7 @@ namespace Virtual {
     Code operator*(int) {
       Code c;
       c.capacity    = size;
-      c.playground  = code;
+      c.playground  = (Instruction*)code;
       c.data_size   = data_size;
       c.data        = data;
       return c;
@@ -633,18 +719,25 @@ namespace Virtual {
   };
 }
 namespace Tests {
-  void test_Virtual() {
-    using namespace Virtual;
-    CodeBuilder builder;
-    builder << Instruction_PUTS;
-    builder << 0U;
-    builder++;
-    builder << Instruction_RET;
-    builder++;
-    builder += L"hellow, word";
-    Code* code = *builder;
-    Code_SaveFromFile(*code, "./hellow_word.nb");
-    Execute("./hellow_word.nb");
+  bool test_Virtual() {
+    try {
+      using namespace Virtual;
+      CodeBuilder builder;
+      builder << Instruction_PUTS;
+      builder << 0U;
+      builder++;
+      builder << Instruction_RET;
+      builder++;
+      builder += L"hellow word";
+      Code* code = *builder;
+      Code_SaveFromFile(*code, "./hellow_word.nb");
+      printf("[%u|%u]\n", code->capacity, code->data_size);
+      Execute("./hellow_word.nb");
+    } catch (std::exception e) {
+      MewPrintError(e);
+      return false;
+    }
+    return true;
   }
 }
 

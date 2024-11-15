@@ -21,17 +21,18 @@
 	mul <type:1b> <type:1b>
 	div <type:1b> <type:1b>
 	xor <type:1b> <type:1b>
-	or <type:1b> <type:1b>
+	or  <type:1b> <type:1b>
 	not <type:1b>
 	and <type:1b> <type:1b>
-	ls <type:1b> <type:1b>
-	rs <type:1b> <type:1b>
+	ls  <type:1b> <type:1b>
+	rs  <type:1b> <type:1b>
 	jmp <offset:4b>
 	ret -no args-
 	test -no args-
 	j<if> <offset:4b>
 	mov <type:1b> <address:4b>
 	putc <char:2b>
+	puti -stack head-
 	puts <address:4b>
 ```
 > next addition float math 

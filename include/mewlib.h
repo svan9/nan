@@ -29,4 +29,49 @@
 		MEW_IN_RANGE((lexpr)-(range), (lexpr)+(range), rexpr))
 #endif
 
+#ifdef __cplusplus
+	#define MewPrintError(_error) printf("\nErrored from %s:%i at function `%s(...)`\n\twhat: %s", __FILE__, __LINE__, __func__, (_error).what());
+
+	#include <concepts>
+
+namespace Mew {
+	template<typename>
+	struct ClearType;
+
+	template<typename T>
+	struct ClearType<T*> {
+		typedef T type;
+	};
+
+	template<typename T, size_t size>
+	struct ClearType<T[size]> {
+		typedef T type;
+	};
+
+	template<typename T>
+	struct ClearType<const T> {
+		typedef T type;
+	};
+
+	template<typename T>
+	struct ClearType<const T&> {
+		typedef T type;
+	};
+
+	template<typename T>
+	struct ClearType<const T*> {
+		typedef T type;
+	};
+
+	template<typename T>
+	struct ClearType {
+		typedef T type;
+	};
+	
+
+	template<typename Base, typename Derived>
+	concept BaseOf = std::is_base_of_v<ClearType<Base>, ClearType<Derived>>;
+}
+#endif
+
 #endif
