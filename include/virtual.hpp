@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 
+
 /*
 Reference
   push <type:1b> <value:4b>
@@ -50,6 +51,10 @@ namespace Virtual {
     Instruction_RS, // right shift
 
     Instruction_NUM,  // arg type | number
+    Instruction_INT,  // arg type | int
+    Instruction_FLT,  // arg type | float
+    Instruction_DBL,  // arg type | double
+    Instruction_UINT, // arg type | uint
     Instruction_MEM,  // arg type | memory
     /*depricated*/
     Instruction_HEAP, // arg type | heap begin
@@ -70,6 +75,8 @@ namespace Virtual {
     Instruction_PUTS,
   };
 
+  #define VIRTUAL_VERSION (Instruction_PUTS*100)+43
+
   struct Code {
     size_t capacity;
     Instruction* playground;
@@ -81,6 +88,8 @@ namespace Virtual {
     std::ofstream file(path, std::ios::out | std::ios::binary);
     MewAssert(file.is_open());
     file.seekp(std::ios::beg);
+    uint vv = (uint)VIRTUAL_VERSION;
+    file.write((const char*)(&vv), sizeof(uint));
     file << code.capacity;
     for (int i = 0; i < code.capacity; i++) {
       file << ((byte*)code.playground)[i];
@@ -111,6 +120,14 @@ namespace Virtual {
     MewAssert(file.is_open());
     file.seekg(std::ios::beg);
     file >> std::noskipws;
+    uint file_version;
+    char vv[sizeof(uint)];
+    file.read(vv, sizeof(uint));
+    memcpy(&file_version, vv, sizeof(uint));
+    if (file_version != VIRTUAL_VERSION) {
+      MewWarn("file version not support (%i != %i)", file_version, VIRTUAL_VERSION); 
+      return nullptr;
+    }
     Code* code = new Code();
     file >> code->capacity;
     code->playground = new Instruction[code->capacity];
@@ -561,11 +578,15 @@ namespace Virtual {
   // template<size_t alloc_size = 8>
   class CodeBuilder {
   public:
+    struct untyped_pair {
+      byte* data;
+      byte size;
+    };
     static const size_t alloc_size = 8;
   private:
     size_t capacity, size, code_cursor = 0;
     byte* code;
-    size_t data_size = 0;
+    size_t _data_size = 0;
     byte* data = nullptr;
     byte cursor = 0;
     byte line[alloc_size];
@@ -575,6 +596,10 @@ namespace Virtual {
 
     size_t code_size() const noexcept {
       return size;
+    }
+    
+    size_t data_size() const noexcept {
+      return _data_size;
     }
 
     void Upsize(size_t _size = alloc_size) {
@@ -614,20 +639,20 @@ namespace Virtual {
     }
     
     friend CodeBuilder& operator+(CodeBuilder& cb, const CodeBuilder& i) {
-      size_t __size = i.data_size;
+      size_t __size = i._data_size;
       size_t __rsize = __size;
       if (!cb.data) {
         cb.data = new byte[__rsize];
       } else {
-        byte* __new = new byte[cb.data_size+__rsize];
-        memcpy(__new, cb.data, cb.data_size);
+        byte* __new = new byte[cb._data_size+__rsize];
+        memcpy(__new, cb.data, cb._data_size);
         byte* __old = cb.data; 
         cb.data = __new;
         free(__old);
       }
-      memset(cb.data+cb.data_size, 0, __rsize);
-      memcpy(cb.data+cb.data_size, i.data, __rsize);
-      cb.data_size += __rsize;
+      memset(cb.data+cb._data_size, 0, __rsize);
+      memcpy(cb.data+cb._data_size, i.data, __rsize);
+      cb._data_size += __rsize;
       return cb;
     }
     friend CodeBuilder& operator+(CodeBuilder& cb, const wchar_t* text) {
@@ -636,15 +661,15 @@ namespace Virtual {
       if (!cb.data) {
         cb.data = new byte[__rsize];
       } else {
-        byte* __new = new byte[cb.data_size+__rsize];
-        memcpy(__new, cb.data, cb.data_size);
+        byte* __new = new byte[cb._data_size+__rsize];
+        memcpy(__new, cb.data, cb._data_size);
         byte* __old = cb.data; 
         cb.data = __new;
         free(__old);
       }
-      memset(cb.data+(cb.data_size*sizeof(wchar_t)), 0, __rsize);
-      memcpy(cb.data+(cb.data_size*sizeof(wchar_t)), text, __rsize);
-      cb.data_size += __rsize;
+      memset(cb.data+(cb._data_size*sizeof(wchar_t)), 0, __rsize);
+      memcpy(cb.data+(cb._data_size*sizeof(wchar_t)), text, __rsize);
+      cb._data_size += __rsize;
       return cb;
     }
 
@@ -694,6 +719,14 @@ namespace Virtual {
       cb.cursor += sizeof(i); 
       return cb;
     }
+    friend CodeBuilder& operator<<(CodeBuilder& cb, untyped_pair i) {
+      if (cb.cursor+i.size >= alloc_size) {
+        cb.Enter();
+      }
+      memcpy(cb.line+cb.cursor+1, &i.data, i.size);
+      cb.cursor += i.size; 
+      return cb;
+    }
 
     CodeBuilder operator++(int) {
       Enter();
@@ -704,7 +737,7 @@ namespace Virtual {
       Code* c = new Code();
       c->capacity   = size;
       c->playground = (Instruction*)(code);
-      c->data_size  = data_size;
+      c->data_size  = _data_size;
       c->data       = data;
       return c;
     }
@@ -712,7 +745,7 @@ namespace Virtual {
       Code c;
       c.capacity    = size;
       c.playground  = (Instruction*)code;
-      c.data_size   = data_size;
+      c.data_size   = _data_size;
       c.data        = data;
       return c;
     }
@@ -731,7 +764,7 @@ namespace Tests {
       builder += L"hellow word";
       Code* code = *builder;
       Code_SaveFromFile(*code, "./hellow_word.nb");
-      printf("[%u|%u]\n", code->capacity, code->data_size);
+      // printf("[%u|%u]\n", code->capacity, code->data_size);
       Execute("./hellow_word.nb");
     } catch (std::exception e) {
       MewPrintError(e);

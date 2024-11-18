@@ -5,7 +5,7 @@
 
 namespace Token {
 
-enum Kind {
+enum Kind: unsigned long long {
 // punctuation
 	Token_Entry,
 	Token_Extern,
@@ -29,6 +29,7 @@ enum Kind {
 	Token_Unsigned,
 	Token_Short,
 	Token_String,
+	Token_Number,
 	Token_Let,
 	Token_Const,
 	Token_Void,
@@ -66,16 +67,17 @@ enum Kind {
 	Token_SquareClose,
 	Token_FigureOpen,
 	Token_FigureClose,
-	Token_One,
-	Token_Two,
-	Token_Three,
-	Token_Four,
-	Token_Five,
-	Token_Six,
-	Token_Seven,
-	Token_Eight,
-	Token_Nine,
-	Token_Zero,
+	Token_One 	,//= (1 << 6),
+	Token_Two 	,//= (1 << 7),
+	Token_Three ,//= (1 << 8),
+	Token_Four 	,//= (1 << 9),
+	Token_Five	,//= (1 << 10),
+	Token_Six 	,//= (1 << 11),
+	Token_Seven ,//= (1 << 12),
+	Token_Eight ,//= (1 << 13),
+	Token_Nine 	,//= (1 << 14),
+	Token_Zero 	,//= (1 << 15),
+	// Token_Digit = Token_One | Token_Two | Token_Three | Token_Four | Token_Five | Token_Six | Token_Seven | Token_Eight | Token_Nine | Token_Zero,
 // .. 
 	Token_Text,
 };

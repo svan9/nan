@@ -9,6 +9,7 @@
 #define MewAssert(expr) if (!(expr)) {__mewassert_nm(#expr, __FILE__, __LINE__, __func__); exit(1); }
 #define MewNot() MewUserAssert(false, "not")
 #define MewNoImpl() MewUserAssert(false, "not implemented")
+#define MewWarn(fmt, ...) printf("-- MEW WARN " fmt " --\n", __VA_ARGS__)
 
 #ifndef DISABLE_MEW_PING
 	#define __mew printf("-- mew at %s:%i, %s(...) --\n", __FILE__, __LINE__, __func__);
