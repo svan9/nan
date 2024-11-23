@@ -6,6 +6,22 @@
 namespace Token {
 
 enum Kind: unsigned long long {
+// // asm
+// 	Token_Push,
+// 	Token_Pop,
+// 	Token_Add,
+// 	Token_Sub,
+// 	Token_Mul,
+// 	Token_Div,
+// 	Token_Xor,
+// 	Token_Or,
+// 	Token_Not,
+// 	Token_And,
+// 	Token_LS,
+// 	Token_RS,
+// 	Token_Jmp,
+// 	Token_Ret,
+// 	Token_Ret,
 // punctuation
 	Token_Entry,
 	Token_Extern,

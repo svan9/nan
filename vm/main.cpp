@@ -45,8 +45,10 @@ using namespace std;
   #undef  _WIN32_WINNT
   #define _WIN32_WINNT   0x0500
 #endif
-#include <windows.h>
-#include "Wincon.h"
+#ifdef _WIN32
+	#include <windows.h>
+	#include "Wincon.h"
+#endif
 
 int main(int argc, char** argv) {
 		if (argc < 2) {
@@ -58,6 +60,7 @@ int main(int argc, char** argv) {
 	const char* path = real_args[0];
 	Virtual::Execute(path);
 
+#ifdef _WIN32
 	HWND consoleWnd = GetConsoleWindow();
 	DWORD dwProcessId;
 	GetWindowThreadProcessId(consoleWnd, &dwProcessId);
@@ -65,5 +68,6 @@ int main(int argc, char** argv) {
 		printf("\n");
 		system("pause");
 	}	
+#endif
 	return 0;
 }

@@ -21,7 +21,7 @@ Result <float, err> foo() {
 }
 
 // entry of program
-entry(int argc, string[] argv) -> Result {
+entry {
 // call function
 	std::console::print("hellow");
 // call foo with unwrap result

@@ -91,6 +91,29 @@ namespace Lexer {
     return true;
   }
 
+  bool CheckText(Lexer& lexer) {
+    std::string buffer;
+    size_t it = 0;
+    while (!lexer.sit.IsEnd()) {
+      char c = *(++lexer.sit);
+      if (
+        buffer[it] == ' '  ||
+        buffer[it] == '\t' ||
+        buffer[it] == '\r' ||
+        buffer[it] == '\n' ||
+        buffer[it] == '\v' ||
+        buffer[it] == '\b'
+      ) {
+        lexer.tokens.push_back({Token::Token_Text, (char*)buffer.c_str()});
+        break;
+      } 
+      else {
+        buffer[it++] = c;
+      }
+    }
+    return true;
+  }
+  
   bool CheckString(Lexer& lexer) {
     if (*(lexer.sit) == '"') {
       std::string buffer;
@@ -178,7 +201,8 @@ namespace Lexer {
         default:
           if (CheckString(lexer)) { }
           else if (!CheckKeyWords(lexer)) {
-            lexer.tokens.push_back({Token::Token_Text}); 
+            CheckText(lexer);
+            // lexer.tokens.push_back({Token::Token_KeyWord}); 
           }
         break;
       }

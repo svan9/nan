@@ -37,6 +37,7 @@ namespace Parser {
 
   struct Parser {
     Lexer::Lexer* lexer;
+    AST* global_ast;
     AST* ast;
     Lib::Builder builder;		
   };
@@ -83,11 +84,44 @@ namespace Parser {
     return true;
   }
 
+  bool Variable(Parser& parser, Iterator& it) {
+    Iterator stored_it(it); 
+    bool has_touches = isKindOf(it, Token::Kind::Token_Text);
+    if (!has_touches) {
+      it = stored_it;
+      return false;
+    }
+    data_t name = (*it).data;
+    if (parser.ast->has_option(name)) {
+      int idx = (int)parser.ast->get_option(name).data();
+      AST* opt = parser.ast->at(idx);
+      if (opt->has_option("type", "typename")) {
+        /* todo cast types for expression */
+        it = stored_it;
+        return false;
+      }
+      else if (opt->has_option("type", "variable")) {
+        if (opt->has_option("const")) {
+          if (opt->has_option("const_type", "number")) {
+            int value = (int)opt->get_option("const_value").data();
+            ++(parser.builder << Instruction_PUSH << Instruction_NUM << value);
+          }
+          else if (opt->has_option("const_type", "string")) {
+            parser.builder += opt->get_option("const_value").data();
+            uint address = parser.builder.DataCursor();
+            ++(parser.builder << Instruction_PUSH << Instruction_NUM << address);
+          }
+        }
+      }
+    }
+    return true;
+  }
+  
   bool Number(Parser& parser, Iterator& it) {
     Iterator stored_it(it);
     bool has_negative = isKindOfN(it, Token::Kind::Token_Minus);
     bool is_float = false;
-    int i_num = -1; 
+    int i_num = -1;
     float i_float = -1;
     double i_double = -1;
     while (isKindOfDigit(it)) {
@@ -105,12 +139,8 @@ namespace Parser {
         case Token::Kind::Token_Zero: 	c = 0; break;
       }
       i_num = (i_num*10) + c;
+      /* skip underscore | number support kind of 1_000_000 */
       while (isKindOfN(it, Token::Kind::Token_Underscore)) { }
-      //$ todo
-      // if (isKindOfN(it, Token::Kind::Token_Dot)) {
-      //   is_float = true;
-      //   i_float = i_num;
-      // }
     }
     if (i_num == -1) {
       it = stored_it;
@@ -139,9 +169,11 @@ namespace Parser {
   bool Expression(Parser& parser, Iterator& it) {
     Iterator stored_it(it); 
     bool has_touches = 
-      Block(parser, it) ||
-      String(parser, it)
-      ;
+      Block(parser, it)     ||
+      String(parser, it)    ||
+      Number(parser, it)    ||
+      Variable(parser, it)  ||
+      false;
       // isKindOfN(it, Token::Kind::Token_String) ||
       // isKindOfN(it, Token::Kind::Token_Number);
       // NullOrMore(parser, it, Line) &&

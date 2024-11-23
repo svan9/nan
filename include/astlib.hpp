@@ -3,6 +3,7 @@
 
 #include <map>
 #include <stack>
+#include <vector>
 #include <string>
 
 ////////////////////////////////////////////////////////////
@@ -15,7 +16,7 @@ public:
 	// typedef std::string_view OPT_VAL;
 	typedef AST_base Element_t;
 	typedef Element_t* data_element_t;
-	typedef std::stack<data_element_t> datatype_t;
+	typedef std::vector<data_element_t> datatype_t;
 	typedef std::map<OPT_KEY, OPT_VAL> opttype_t;
 private:
 	opttype_t  _M_options;
@@ -41,12 +42,12 @@ public:
 	void options(opttype_t& value) { _M_options = value; }
 	
 	////////////////////////////////////////////////////////////
-	void append(Element_t& tk) { _M_data.push(&tk); }
+	void append(Element_t& tk) { _M_data.push_back(&tk); }
 	
 	////////////////////////////////////////////////////////////
-	Element_t* pop() {
-		Element_t* tk = _M_data.top(); _M_data.pop();
-		return tk;
+	Element_t* at(int idx) {
+		size_t real_idx = (_M_data.size() + idx) % _M_data.size();
+		return _M_data.at(idx);
 	}
 	
 	////////////////////////////////////////////////////////////
@@ -83,7 +84,6 @@ public:
 	bool has_option(OPT_KEY key) {
 		return (_M_options.find("f") != _M_options.end());
 	}
-
 
 	////////////////////////////////////////////////////////////
 	OPT_VAL get_option(OPT_KEY key) {

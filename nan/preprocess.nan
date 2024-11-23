@@ -1,7 +1,71 @@
-//| declare 'tip' words:
-//| type         - declared type 
-//| var          - declared variable
-//| #<literals>  - declaration literals var 
-//| Array        - array token type '(...)'
-tip { "..." type } -> Array< type >;
-tip HELLOW { 'hellow' STRING } -> println("Hellow, " .. STRING)
+// TODO  
+
+template <class T>
+tip enum_mask: enum<T> {
+	////////////////////////////////////////////////////////////
+	T (T real_idx = 0) @gen @replace {
+		ret (1 << real_idx);
+	}
+
+	////////////////////////////////////////////////////////////
+	This& '+'(const This& r) @operator {
+		return ((T)this) | ((T)r);
+	}
+
+	////////////////////////////////////////////////////////////
+	This& '-'(const This& r) @operator {
+		return ((T)this) ^ ((T)r);
+	}
+
+	bool has(const This& r) {
+		return ((T)this) | ((T)r) == ((T)r);
+	}
+};
+
+// default generic value 
+using default enum_mask <i32>; 
+
+enum_mask exec_flags @strict {
+	None, 						// 0b000 | 0
+	Run,  						// 0b001 | 1
+	Compile, 					// 0b010 | 2
+	Test, 						// 0b100 | 8
+	CompileAndRun 		// 0b011 | 3
+		= Run | Compile,
+	CompileAndTest 		// 0b110 | 10
+		= Run | Compile,
+};
+
+entry {
+	Args __args = this->Args();
+	let exec_flags flags;
+	if (__args.has("-c", "--compile")) {
+		flags += exec_flags::Compile;
+	}
+	if (__args.has("-r", "--run")) {
+		flags += exec_flags::Run;
+	}
+	if (__args.has("-t", "--test")) {
+		flags += exec_flags::Test;
+	}
+	
+	////////////////////////////////////////////////////////////
+	***
+		...some code
+	***
+	////////////////////////////////////////////////////////////
+	
+	if (__args.has(exec_flags::Compile)) {
+		> do_compile();
+	}
+	if (__args.has(exec_flags::Run)) {
+		> do_run();
+	}
+
+	////////////////////////////////////////////////////////////
+	***
+		...some code
+	***
+	
+	ret OK();
+}

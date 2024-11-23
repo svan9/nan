@@ -1,0 +1,6 @@
+data:
+	heap text "hellow, word\0"
+
+entry:
+	puts +0
+	ret
