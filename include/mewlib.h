@@ -1,10 +1,24 @@
 #ifndef MewLib_IMPL
 #define MewLib_IMPL
 
-#define __mewassert(strexpr, message, file, line, func) \
-	printf("\nAssert failed at %s:%i, %s(...)\n  With expression (%s)\n  `%s`", file, line, func, strexpr, message);
-#define __mewassert_nm(strexpr, file, line, func) \
-	printf("\nAssert failed at %s:%i, %s(...)\n  With expression (%s)\n", file, line, func, strexpr);
+#ifndef DEBUG
+#define RELEASE
+#endif
+
+#ifndef NULLVAL
+#define NULLVAL ((void)0)
+#endif
+
+#ifdef RELEASE
+	#define __mewassert(strexpr, message, file, line, func) NULLVAL
+	#define __mewassert_nm(strexpr, file, line, func) NULLVAL
+#else
+	#define __mewassert(strexpr, message, file, line, func) \
+		printf("\nAssert failed at %s:%i, %s(...)\n  With expression (%s)\n  `%s`", file, line, func, strexpr, message);
+	#define __mewassert_nm(strexpr, file, line, func) \
+		printf("\nAssert failed at %s:%i, %s(...)\n  With expression (%s)\n", file, line, func, strexpr);
+#endif
+
 #define MewUserAssert(expr, message) if (!(expr)) {__mewassert(#expr, message, __FILE__, __LINE__, __func__); exit(1); }
 #define MewAssert(expr) if (!(expr)) {__mewassert_nm(#expr, __FILE__, __LINE__, __func__); exit(1); }
 #define MewNot() MewUserAssert(false, "not")
@@ -25,7 +39,10 @@
 	#else
 		#define MEW_ADD_MASK(_val, _flag) ((_val) | (_flag))
 	#endif
-	
+
+	bool __mew_bvtr(bool s) { return true; }
+
+	#define MEW_ONE_OR_NONE(_el) (__mew_bvtr(_el))
 	#define MEW_POW2(expr) ((expr)*(expr))
 	#define MEW_IN_RANGE(min, max, value) ((min) <= (value) && (value) >= (max))
 
@@ -39,9 +56,25 @@
 #ifdef __cplusplus
 	#define MewPrintError(_error) printf("\nErrored from %s:%i at function `%s(...)`\n\twhat: %s", __FILE__, __LINE__, __func__, (_error).what());
 
+	#include <string.h>
 	#include <concepts>
 
-namespace Mew {
+	#if __cplusplus >= 202002L
+		#define __CXX20
+	#endif
+
+char *ansi(wchar_t *unicode) {
+	size_t size = wcslen(unicode);
+	char* buffer = new char[size+1]; 
+	for (int i = 0; i < size; i++) {
+		buffer[i] = wctob(unicode[i]);
+	}
+	buffer[size] = '\0';
+	return buffer;
+}
+
+namespace mew {
+#ifdef __CXX20
 	template<typename>
 	struct ClearType;
 
@@ -75,11 +108,15 @@ namespace Mew {
 		typedef T type;
 	};
 	
-
 	template<typename Base, typename Derived>
-	concept BaseOf = std::is_base_of_v<ClearType<Base>, ClearType<Derived>>;
+	concept baseof = std::is_base_of_v<ClearType<Base>, ClearType<Derived>>;
 
-	namespace String {
+	template<typename VF, typename VS>
+	concept same_as = std::same_as<ClearType<VF>, ClearType<VS>>;
+
+#endif
+
+	namespace string {
 		class StringIterator {
 		private:
 		public:
@@ -273,6 +310,7 @@ namespace Mew {
 
 			////////////////////////////////////////////////////////////
 			Number(const char* str) { 
+				using namespace string;
 				StringIterator it(str);
 				NumberType ntype = NumberType::Int;
 				char buffer[strlen(str)+1];
@@ -343,7 +381,7 @@ namespace Mew {
 					(std::same_as<T, int> && container_type == NumberType::Int) ||
 					(std::same_as<T, float> && container_type == NumberType::Float) ||
 					(std::same_as<T, char> && container_type == NumberType::Char) ||
-					(std::same_as<T, double> && container_type == NumberType::Double) ||
+					(std::same_as<T, double> && container_type == NumberType::Double)
 				);
 				*container = *(T*)_M_value;
 			}

@@ -8,6 +8,6 @@ typedef unsigned char byte;
 typedef unsigned int uint;
 
 #include "mewlib.h"
-using namespace Mew::String;
+using namespace mew::string;
 
 #endif

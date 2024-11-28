@@ -14,6 +14,8 @@
 > `<type:1b>` - stack type
 
 ```asm
+	<real_bit>
+	-stack-
 	push <type:1b> <value:4b>
 	pop -no args-
 	add <type:1b> <type:1b>
@@ -31,8 +33,15 @@
 	test -no args-
 	j<if> <offset:4b>
 	mov <type:1b> <address:4b>
+	mset -start- -size- -value- 
 	putc <char:2b>
 	puti -stack head-
 	puts <address:4b>
+	call <proc-idx:4b>
 ```
 > next addition float math 
+
+### call 
+```
+	call 0
+```

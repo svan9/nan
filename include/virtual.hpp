@@ -7,7 +7,8 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
-
+#include <windows.h>
+#include <vector>
 
 /*
 Reference
@@ -34,8 +35,13 @@ gets last elements from stack -> and push to top result
  */
 
 namespace Virtual {
+  struct VirtualMachine;
+  typedef void(*VM_Processor)(VirtualMachine&, byte*);
+
   enum Instruction: byte {
     Instruction_NONE = 0,
+    Instruction_LDLL,
+    Instruction_CALL,
     Instruction_PUSH,
     Instruction_POP,
     Instruction_ADD,
@@ -55,6 +61,7 @@ namespace Virtual {
     Instruction_FLT,  // arg type | float
     Instruction_DBL,  // arg type | double
     Instruction_UINT, // arg type | uint
+    Instruction_BYTE, // arg type | char
     Instruction_MEM,  // arg type | memory
     /*depricated*/
     Instruction_HEAP, // arg type | heap begin
@@ -70,12 +77,13 @@ namespace Virtual {
     Instruction_JL,
     Instruction_JM,
     Instruction_MOV,  // replace head data from stack to memory
+    Instruction_MSET,
     Instruction_PUTC,
     Instruction_PUTI,
     Instruction_PUTS,
   };
 
-  #define VIRTUAL_VERSION (Instruction_PUTS*100)+43
+  #define VIRTUAL_VERSION (Instruction_PUTS*100)+44
 
   struct Code {
     size_t capacity;
@@ -83,7 +91,43 @@ namespace Virtual {
     size_t data_size = 0;
     byte* data = nullptr;
   };
+
+  struct CodeManifest {
+    std::vector<VM_Processor> procs;
+  };
+
+  struct CodeExtended {
+    CodeManifest* manifest;
+    Code* code;
+  };
+
+#pragma region FILE
  
+  void Code_SaveFromFileEx(const CodeExtended& code, const std::filesystem::path& path) {
+    std::ofstream file(path, std::ios::out | std::ios::binary);
+    MewAssert(file.is_open());
+    file.seekp(std::ios::beg);
+    /* version */
+    uint vv = (uint)VIRTUAL_VERSION;
+    file.write((const char*)(&vv), sizeof(uint));
+    /* manifest */
+    file << code.manifest->procs.size();
+    for (auto proc: code.manifest->procs) {
+      file << ((byte*)((uint)((void*)proc)));
+    }
+    /* code */
+    file << code.code->capacity;
+    for (int i = 0; i < code.code->capacity; i++) {
+      file << ((byte*)code.code->playground)[i];
+    }
+    /* data */
+    file << code.code->data_size;
+    for (int i = 0; i < code.code->data_size; i++) {
+      file << ((byte*)code.code->data)[i];
+    }
+    file.close();
+  }
+
   void Code_SaveFromFile(const Code& code, const std::filesystem::path& path) {
     std::ofstream file(path, std::ios::out | std::ios::binary);
     MewAssert(file.is_open());
@@ -101,18 +145,64 @@ namespace Virtual {
     file.close();
   }
 
-  [[deprecated]]
-  void Code_SaveFromFile(const Code& code, const wchar_t* path) {
-    std::filesystem::path __path(path);
-    __path = std::filesystem::absolute(__path.lexically_normal());
-    Code_SaveFromFile(code, __path);
-  }
   void Code_SaveFromFile(const Code& code, const char* path) {
     std::filesystem::path __path(path);
     if (!__path.is_absolute()) {
       __path = std::filesystem::absolute(__path.lexically_normal());
     }
     Code_SaveFromFile(code, __path);
+  }
+
+  void Code_SaveFromFileEx(const CodeExtended& code, const char* path) {
+    std::filesystem::path __path(path);
+    if (!__path.is_absolute()) {
+      __path = std::filesystem::absolute(__path.lexically_normal());
+    }
+    Code_SaveFromFileEx(code, __path);
+  }
+
+  void Code_SaveFromFileEx(Code& code, const char* path) {
+    CodeExtended ce;
+    ce.code = &code;
+    Code_SaveFromFileEx(ce, path);
+  }
+
+  CodeExtended* Code_LoadFromFileEx(const std::filesystem::path& path) {
+    std::ifstream file(path, std::ios::in | std::ios::binary);
+    MewAssert(file.is_open());
+    file.seekg(std::ios::beg);
+    file >> std::noskipws;
+    uint file_version;
+    char vv[sizeof(uint)];
+    file.read(vv, sizeof(uint));
+    memcpy(&file_version, vv, sizeof(uint));
+    if (file_version != VIRTUAL_VERSION) {
+      MewWarn("file version not support (%i != %i)", file_version, VIRTUAL_VERSION); 
+      return nullptr;
+    }
+    CodeExtended* code = new CodeExtended();
+    /* manifest */
+    uint size;
+    file >> size;
+    for (int i = 0; i < size; i++) {
+      uint raw_r;
+      file >> raw_r;
+      code->manifest->procs.push_back((VM_Processor)((void*)(raw_r)));
+    }
+    /* code */
+    file >> code->code->capacity;
+    code->code->playground = new Instruction[code->code->capacity];
+    for (int i = 0; i < code->code->capacity; i++) {
+      file >> ((byte*)code->code->playground)[i];
+    }
+    /* data */
+    file >> code->code->data_size;
+    code->code->data = new byte[code->code->data_size];
+    for (int i = 0; i < code->code->data_size; i++) {
+      file >> ((byte*)code->code->data)[i];
+    }
+    file.close();
+    return code;
   }
 
   Code* Code_LoadFromFile(const std::filesystem::path& path) {
@@ -144,19 +234,29 @@ namespace Virtual {
     return code;
   }
 
-  [[deprecated]]
-  Code* Code_LoadFromFile(const wchar_t* path) {
-    std::filesystem::path __path(path);
-    __path = std::filesystem::absolute(__path.lexically_normal());
-    return Code_LoadFromFile(__path);
-  }
-
   Code* Code_LoadFromFile(const char* path) {
     std::filesystem::path __path(path);
     if (!__path.is_absolute()) {
       __path = std::filesystem::absolute(__path.lexically_normal());
     }
     return Code_LoadFromFile(__path);
+  }
+  
+  CodeExtended* Code_LoadFromFileEx(const char* path) {
+    std::filesystem::path __path(path);
+    if (!__path.is_absolute()) {
+      __path = std::filesystem::absolute(__path.lexically_normal());
+    }
+    return Code_LoadFromFileEx(__path);
+  }
+
+  Code* Code_LoadFromFileExR(const char* path) {
+    std::filesystem::path __path(path);
+    if (!__path.is_absolute()) {
+      __path = std::filesystem::absolute(__path.lexically_normal());
+    }
+    CodeExtended* ce = Code_LoadFromFileEx(__path);
+    return ce->code;
   }
 
   enum VM_Status: byte {
@@ -174,12 +274,18 @@ namespace Virtual {
     VM_TestStatus_EqualLess  = VM_TestStatus_Equal | VM_TestStatus_Less,
   };
 
+#pragma region VM
+
+
   struct VirtualMachine {
     size_t capacity;
     byte *memory, *heap, 
       *begin, *end;
     std::stack<uint> stack;
+    // std::stack<byte> byte_stack;
     std::stack<byte*> begin_stack;
+    std::vector<VM_Processor> procs;
+    // std::vector<void*> libs_funcs;
     byte test;
     byte status;
   };
@@ -214,6 +320,11 @@ namespace Virtual {
     vm.capacity = size;
   }
 
+  uint DeclareProccessor(VirtualMachine& vm, VM_Processor proc) {
+    vm.procs.push_back(proc);
+    return vm.procs.size()-1;
+  }
+
   void LoadMemory(VirtualMachine& vm, Code& code) {
     vm.memory = (byte*)code.playground;
   }
@@ -225,6 +336,7 @@ namespace Virtual {
   void VM_Push(VirtualMachine& vm, byte* line) {
     byte head_byte = line[1];
     switch (head_byte) {
+      case Instruction_FLT:
       case Instruction_NUM: {
         uint number = 0;
         memcpy(&number, line+2, sizeof(number));
@@ -249,6 +361,7 @@ namespace Virtual {
   
   void VM_StackTop(VirtualMachine& vm, byte type, uint* x) {
     switch (type) {
+      case Instruction_FLT:
       case Instruction_NUM: {
         MewUserAssert(!vm.stack.empty(), "stack is empty");
         uint _top = vm.stack.top();
@@ -266,6 +379,14 @@ namespace Virtual {
       default: MewNot(); break;
     }
     vm.stack.pop();
+  }
+
+  void VM_Call(VirtualMachine& vm, byte* line) {
+    uint x; /* storage processors idx */
+    memcpy(&x, line, sizeof(x));
+    MewUserAssert(x < vm.procs.size(), "cannot find loaded proccessor by idx");
+    auto proc = vm.procs.at(x);
+    proc(vm, line);
   }
 
   void VM_MathBase(VirtualMachine& vm, byte* line, uint* x, uint* y) {
@@ -425,6 +546,18 @@ namespace Virtual {
     byte* pointer = vm.heap+offset;
     memcpy(pointer, &x, sizeof(x));
   }
+  
+  void VM_MSet(VirtualMachine& vm, byte* line) {
+    uint x; /* start */
+    uint y; /* size  */
+    uint z; /* value */
+    VM_StackTop(vm, Instruction_NUM, &x);
+    VM_StackTop(vm, Instruction_NUM, &y);
+    VM_StackTop(vm, Instruction_NUM, &z);
+    MewUserAssert(vm.heap+x < vm.end, "out of memory");
+    MewUserAssert(vm.heap+x+y < vm.end, "out of memory");
+    memset(vm.heap+x, z, y);
+  }
 
   void VM_Putc(VirtualMachine& vm, byte* line) {
     wchar_t long_char;
@@ -438,7 +571,6 @@ namespace Virtual {
     char str[12] = {0};
     itoa(x, str, 10);
     puts(str);
-    free(str);
   }
 
   void VM_Puts(VirtualMachine& vm, byte* line) {
@@ -519,6 +651,9 @@ namespace Virtual {
       case Instruction_MOV: {
         VM_Mov(vm, line);
       } break;
+      case Instruction_MSET: {
+        VM_MSet(vm, line);
+      } break;
       case Instruction_PUTC: {
         VM_Putc(vm, line);
       } break;
@@ -527,6 +662,9 @@ namespace Virtual {
       } break;
       case Instruction_PUTS: {
         VM_Puts(vm, line);
+      } break;
+      case Instruction_CALL: {
+        VM_Call(vm, line);
       } break;
     }
   }
@@ -564,14 +702,26 @@ namespace Virtual {
     Run(vm, code);
   }
 
-  void Execute(const wchar_t* path) {
+  void Execute(const char* path) {
     Code* code = Code_LoadFromFile(path);
     Execute(*code);
   }
 
-  void Execute(const char* path) {
-    Code* code = Code_LoadFromFile(path);
-    Execute(*code);
+  void ExecuteEx(VirtualMachine& vm, CodeExtended& code) {
+    Alloc(vm, *code.code);
+    LoadMemory(vm, *code.code);
+    Run(vm, *code.code);
+    vm.procs = code.manifest->procs;
+  }
+  
+  void ExecuteEx(CodeExtended& code) {
+    VirtualMachine vm;
+    ExecuteEx(vm, code);
+  }
+
+  void ExecuteEx(const char* path) {
+    CodeExtended* code = Code_LoadFromFileEx(path);
+    ExecuteEx(*code);
   }
 
 

@@ -3,17 +3,199 @@
 
 #include <concepts>
 #include "virtual.hpp"
+#include <vector>
+#include <map>
+#include <string>
 
 namespace Virtual::Lib {
   class Builder;
   typedef void(*generator_t)(Builder&);
 
+  class Arena {
+  public:
+    struct Range {
+      size_t start = 0, end = 0;
+
+      Range& operator++() {
+        start+=1;
+        end+=1;
+        return *this;
+      }
+
+      Range operator++(int) {
+        Range r(*this);
+        ++(*this);
+        return r;
+      }
+    };
+
+    friend bool operator==(const Range& l, const Range& r) {
+      return (l.start == r.start) && (l.end == r.end); 
+    }
+
+    friend bool operator<(const Range& l, const Range& r) {
+      return l.start > r.start && l.end < r.end && ((l.end - r.start) < (l.end - r.start)); 
+    }
+
+    friend bool operator>(const Range& l, const Range& r) {
+      return l.start < r.start && l.end > r.end && ((l.end - r.start) > (l.end - r.start)); 
+    }
+
+    friend Range operator+(const Range& l, int i) {
+      return Range{(l.start + i), (l.end + i)}; 
+    }
+
+    friend Range& operator+=(Range& l, int i) {
+      l.start += i;
+      l.end += i;
+      return l; 
+    }
+
+  private:
+    Range global_range;
+    std::vector<Range> uses;
+  public:
+    ////////////////////////////////////////////////////////////
+    Arena() {}
+
+    ////////////////////////////////////////////////////////////
+    Arena(size_t size) {
+      global_range = {0, size};
+    }
+
+    size_t size() const noexcept {
+      return global_range.start - global_range.end;
+    }
+
+    ////////////////////////////////////////////////////////////
+    void Free(size_t idx) {
+      MewUserAssert(idx < uses.size(), "out of range");
+      uses.erase(uses.begin()+idx);
+    }
+
+    ////////////////////////////////////////////////////////////
+    void Free(const Range& range) {
+      int i = 0;
+      for (Range& r: uses) {
+        if (r == range) { 
+          Free(i);
+          return;
+        } i++;
+      }
+    }
+    
+    ////////////////////////////////////////////////////////////
+    bool Exist(const Range& range) {
+      for (Range& r: uses) {
+        if (r == range) { 
+          return true;
+        }
+      }
+      return false;
+    }
+
+    ////////////////////////////////////////////////////////////
+    Range Alloc(size_t size) {
+      Range rgx{0, size};
+      for (int i = global_range.start; i < global_range.end; i++) {
+        if (rgx < global_range && Exist(rgx)) {
+          uses.push_back(rgx);
+          return uses.back();
+        }
+        ++rgx;
+      }
+      MewUserAssert(false, "cannot allocate");
+    }
+    
+    ////////////////////////////////////////////////////////////
+    Range Alloc_s(size_t size) {
+      Range rgx{0, size};
+      for (int i = global_range.start; i < global_range.end; i++) {
+        if (rgx < global_range && Exist(rgx)) {
+          uses.push_back(rgx);
+          return uses.back();
+        }
+        ++rgx;
+      }
+      rgx.start = global_range.end;
+      global_range.end += size;
+      rgx.end = global_range.end;
+      return rgx;
+    }
+  };
+
   class Builder {
   private:
     CodeBuilder* actual_builder;
+    std::map<std::string, size_t> _functions;
+    std::map<std::string, VM_Processor> _externs_functions;
+    std::map<std::string, Arena::Range> _vars;
+    Arena _arena;
   public:
     ////////////////////////////////////////////////////////////
     Builder(): actual_builder(new CodeBuilder()) {}
+
+    ////////////////////////////////////////////////////////////
+    void ExternFunction(std::string name, VM_Processor proc) {
+      _externs_functions.insert({name, proc});
+    }
+
+    ////////////////////////////////////////////////////////////
+    void BeginFunction(std::string name) {
+      _functions.insert({name, Cursor()});
+    }
+
+    ////////////////////////////////////////////////////////////
+    void EndFunction() {
+      ++((*this) << Instruction_RET);
+    }
+
+    ////////////////////////////////////////////////////////////
+    void Jump(size_t line) {
+      int real_idx = Cursor() - line;
+      ++((*this) << Instruction_JMP << real_idx);
+    }
+
+    ////////////////////////////////////////////////////////////
+    void CallExternFunction(size_t idx) {
+      ++((*this) << Instruction_CALL << (uint)idx);
+    }
+
+    ////////////////////////////////////////////////////////////
+    void CallFunction(std::string name) {
+      auto _func = _functions.find(name);
+      if (_func == _functions.end()) {
+        auto _e_func = _externs_functions.find(name);
+        MewUserAssert(_e_func != _externs_functions.end(), "invalid extern function");
+        uint idx = std::distance(_externs_functions.begin(), _e_func);
+        CallExternFunction(idx);
+        return;
+      }
+      Jump(_func->second);
+    }
+
+    ////////////////////////////////////////////////////////////
+    uint Assign(std::string name, size_t size, bool clear_memory = false) {
+      MewUserAssert(_vars.find(name) == _vars.end(), "already assign");
+      auto range = _arena.Alloc_s(size);
+      _vars.insert({name, range});
+      if (clear_memory) {
+        ++((*this) << Instruction_PUSH << (uint)range.start);
+        ++((*this) << Instruction_PUSH << (uint)(range.end-range.start));
+        ++((*this) << Instruction_PUSH << 0U);
+        ++((*this) << Instruction_MSET);
+      }
+      return range.start;
+    }
+
+    ////////////////////////////////////////////////////////////
+    void Destroy(std::string name) {
+      auto _v = _vars.find(name);
+      MewUserAssert(_v != _vars.end(), "cannot destroy (undefined)");
+      _arena.Free(_v->second);
+      _vars.erase(name);
+    }
+
 
     ////////////////////////////////////////////////////////////
     const CodeBuilder& ActualBulder() noexcept {
@@ -112,52 +294,7 @@ namespace Virtual::Lib {
       return b;
     }
   };
-
-  namespace Generators {
-    struct Arg {
-      byte type_size;
-      const char* name;
-    };
-    
-    struct Function {
-      Arg* args;
-      byte arg_count;
-      CodeBuilder inner;
-      bool has_return = false;
-      /* generate before writing */
-      size_t actual_pos = -1;
-      
-      void PushArg(Builder& b, const Arg& arg_info, byte* data) {
-        MewUserAssert(arg_info.type_size != 0, "cannot be 0");
-        MewUserAssert(arg_info.type_size <= 4, "not supported big struct data, use pointer");
-        b << CodeBuilder::untyped_pair{data, arg_info.type_size};
-      }
-
-      bool PushArgs(Builder& b, byte arg_size, Arg* arg_info, byte* data) {
-        if (arg_size != arg_count) {
-          return false;
-        }
-        for (int i = 0; i < arg_size; i++) {
-          const Arg& arg = arg_info[i];
-          PushArg(b, arg, data);
-          data += arg.type_size;
-        }
-        return true;
-      }
-
-      void Call(Builder& b) {        
-        MewUserAssert(actual_pos != -1, "function is not generate");
-        ++(b << Instruction_JMP << (int)(actual_pos - b.Cursor()));
-      }
-
-      void generate(Builder& b) {
-        actual_pos = b.Cursor();
-        b << inner;
-        ++(b << Instruction_RET);
-      }
-    };
-  }
-  
+ 
 }
 
 namespace Tests {

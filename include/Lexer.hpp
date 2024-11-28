@@ -102,7 +102,7 @@ namespace Lexer {
         buffer[it] == '\r' ||
         buffer[it] == '\n' ||
         buffer[it] == '\v' ||
-        buffer[it] == '\b'
+        buffer[it] == '\f'
       ) {
         lexer.tokens.push_back({Token::Token_Text, (char*)buffer.c_str()});
         break;
@@ -122,6 +122,7 @@ namespace Lexer {
         char c = *(++lexer.sit);
         if (c == '"' && buffer[it] != '\\') {
           lexer.tokens.push_back({Token::Token_String, (char*)buffer.c_str()});
+          return true;
           break;
         } 
         else if (buffer[it] != '\\' && c == 'n') {
@@ -141,6 +142,7 @@ namespace Lexer {
         }
       }
     }
+    return false;
   }
 
   #define PUSH_SINGLE_TOKEN(cr, _token) case cr: lexer.tokens.push_back({_token}); break;

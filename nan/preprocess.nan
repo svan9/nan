@@ -1,7 +1,6 @@
 // TODO  
 
-template <class T>
-tip enum_mask: enum<T> {
+tip enum_mask<T>: enum<T> {
 	////////////////////////////////////////////////////////////
 	T (T real_idx = 0) @gen @replace {
 		ret (1 << real_idx);
@@ -24,6 +23,34 @@ tip enum_mask: enum<T> {
 
 // default generic value 
 using default enum_mask <i32>; 
+
+
+expand class foo_A;
+	struct A {
+		int f1;
+		double f2;
+	};
+
+	struct B {
+		using parent A;
+		float f3;
+	};
+
+	This& (int a) @gen {
+		A.f1 = a;	
+	}
+
+narrow foo_A;
+
+expand class foo_B;
+	string message;
+
+	This& (int a) @gen {
+		This(a);
+		message = "hellow";
+	}
+narrow foo_B;
+
 
 enum_mask exec_flags @strict {
 	None, 						// 0b000 | 0
