@@ -2,6 +2,8 @@
 #include "nan.hpp"
 
 int main() {
+	printf("test -- virtual -- \n");
 	Tests::test_Virtual();
-	// Tests::test_Virtual_Lib_Construct();
+	printf("\ntest -- virtual::lib --\n");
+	Tests::test_Virtual_Lib();
 }

@@ -1,8 +1,12 @@
 #ifndef MewLib_IMPL
 #define MewLib_IMPL
 
-#ifndef DEBUG
-#define RELEASE
+#define MEW_NO_RELEASE
+
+#ifndef MEW_NO_RELEASE
+	#ifndef DEBUG
+		#define RELEASE
+	#endif
 #endif
 
 #ifndef NULLVAL
@@ -25,6 +29,7 @@
 #define MewAssert(expr) if (!(expr)) {__mewassert_nm(#expr, __FILE__, __LINE__, __func__); exit(1); }
 #define MewNot() MewUserAssert(false, "not")
 #define MewNoImpl() MewUserAssert(false, "not implemented")
+#define MewNotImpl() MewUserAssert(false, "not implemented")
 #define MewWarn(fmt, ...) printf("-- MEW WARN " fmt " --\n", __VA_ARGS__)
 
 #ifndef DISABLE_MEW_PING
@@ -46,7 +51,9 @@
 
 	#define MEW_ONE_OR_NONE(_el) (__mew_bvtr(_el))
 	#define MEW_POW2(expr) ((expr)*(expr))
-	#define MEW_IN_RANGE(min, max, value) ((min) <= (value) && (value) >= (max))
+	#define MEW_IN_RANGE(min, max, value) ((min) <= (value) && (value) <= (max))
+	#define MEW_RM_ALIGN(value, align) ((value) - ((value) % (align)))
+	#define MEW_RM_ALIGN_A(value, align) ((value) + ((value) % (align)))
 
 	#define MEW_RANGE_EQ_PRT(lexpr, rexpr, range) ()
 

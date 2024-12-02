@@ -11,6 +11,7 @@
 
 #endif
 
+
 const char* executable_name() {
 #if defined(PLATFORM_POSIX) || defined(__linux__) //check defines for your setup
   std::string sp;

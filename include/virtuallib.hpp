@@ -7,6 +7,145 @@
 #include <map>
 #include <string>
 
+namespace Virtual::Visualizer {
+  using namespace Virtual;
+
+  const char* VType(byte t) {
+    switch(t) {
+      case Instruction_MEM:
+        return "'MEM'";
+      case Instruction_RMEM:
+        return "'RMEM'";
+      case Instruction_NUM: 
+        return "'NUM'";
+      default: return "undefined";
+    }
+  }
+
+  void VLine(std::stringstream& str, byte* line) {
+    byte head_byte = line[0];
+    switch (head_byte) {
+      case Instruction_NONE: break;
+      case Instruction_PUSH: {
+        int value; memcpy(&value, line+2, sizeof(int));
+        str << "push " << VType(line[1]) << " " << value << "\n";
+      } break;
+      case Instruction_POP: {
+        str << "pop\n";
+      } break;
+      case Instruction_ADD: {
+        str << "add " << VType(line[1]) << " " << VType(line[2]) << "\n";
+      } break;
+      case Instruction_SUB: {
+        str << "sub " << VType(line[1]) << " " << VType(line[2]) << "\n";
+      } break;
+      case Instruction_MUL: {
+        str << "mul " << VType(line[1]) << " " << VType(line[2]) << "\n";
+      } break;
+      case Instruction_DIV: {
+        str << "div " << VType(line[1]) << " " << VType(line[2]) << "\n";
+      } break;
+      case Instruction_XOR: {
+        str << "xor " << VType(line[1]) << " " << VType(line[2]) << "\n";
+      } break;
+      case Instruction_OR: {
+        str << "or " << VType(line[1]) << " " << VType(line[2]) << "\n";
+      } break;
+      case Instruction_NOT: {
+        str << "not " << VType(line[1]) << "\n";
+      } break;
+      case Instruction_LS: {
+        str << "ls " << VType(line[1]) << " " << VType(line[2]) << "\n";
+      } break;
+      case Instruction_RS: {
+        str << "rs " << VType(line[1]) << " " << VType(line[2]) << "\n";
+      } break;
+      case Instruction_JMP: {
+        int value; memcpy(&value, line+1, sizeof(int));
+        str << "jmp " << (value/8) << "\n";
+      } break;
+      case Instruction_RET: {
+        str << "ret\n";
+      } break;
+      case Instruction_TEST: {
+        str << "test\n";
+      } break;
+      case Instruction_JE: {
+        int value; memcpy(&value, line+1, sizeof(int));
+        str << "je " << (value/8) << "\n";
+      } break;
+      case Instruction_JEL: {
+        int value; memcpy(&value, line+1, sizeof(int));
+        str << "jel " << (value/8) << "\n";
+      } break;
+      case Instruction_JEM: {
+        int value; memcpy(&value, line+1, sizeof(int));
+        str << "jem " << (value/8) << "\n";
+      } break;
+      case Instruction_JL: {
+        int value; memcpy(&value, line+1, sizeof(int));
+        str << "jl " << (value/8) << "\n";
+      } break;
+      case Instruction_JM: {
+        int value; memcpy(&value, line+1, sizeof(int));
+        str << "jm " << (value/8) << "\n";
+      } break;
+      case Instruction_JNE: {
+        int value; memcpy(&value, line+1, sizeof(int));
+        str << "jne " << (value/8) << "\n";
+      } break;
+      case Instruction_MOV: {
+        int value; memcpy(&value, line+2, sizeof(int));
+        str << "mov " << VType(line[1]) << " " << value << "\n";
+      } break;
+      case Instruction_MSET: {
+        str << "mset\n";
+      } break;
+      case Instruction_PUTC: {
+        str << "putc\n";
+      } break;
+      case Instruction_PUTI: {
+        str << "puti\n";
+      } break;
+      case Instruction_PUTS: {
+        str << "puts\n";
+      } break;
+      case Instruction_CALL: {
+        str << "call -not impl-\n";
+      } break;
+    }
+  }
+
+  std::string Visualize(Code* code) {
+    std::stringstream builder;
+    for (int i = 0; i < code->capacity; i += 8) {
+      byte* line = (byte*)code->playground + i; 
+      VLine(builder, line);
+    }
+    return builder.str();
+  }
+
+  void VisualizeToFile(Code* code, std::filesystem::path& path) {
+    std::ofstream file(path, std::ios::out | std::ios::binary | std::ios::ate);
+    MewAssert(file.is_open());
+    file << Visualize(code);
+    file.close();
+  }
+
+  void VisualizeToFile(Code* code, const char* path) {
+    std::filesystem::path __path(path);
+    if (!__path.is_absolute()) {
+      __path = std::filesystem::absolute(__path.lexically_normal());
+    }
+    VisualizeToFile(code, __path);
+  }
+
+  void VisualizeToFile(Code* code) {
+    VisualizeToFile(code, "./temp.s");
+  }
+
+};
+
 namespace Virtual::Lib {
   class Builder;
   typedef void(*generator_t)(Builder&);
@@ -26,6 +165,10 @@ namespace Virtual::Lib {
         Range r(*this);
         ++(*this);
         return r;
+      }
+
+      constexpr uint size() const noexcept {
+        return end - start;
       }
     };
 
@@ -62,9 +205,10 @@ namespace Virtual::Lib {
     Arena(size_t size) {
       global_range = {0, size};
     }
-
-    size_t size() const noexcept {
-      return global_range.start - global_range.end;
+  
+    ////////////////////////////////////////////////////////////
+    constexpr size_t size() const noexcept {
+      return global_range.end - global_range.start;
     }
 
     ////////////////////////////////////////////////////////////
@@ -109,6 +253,10 @@ namespace Virtual::Lib {
     
     ////////////////////////////////////////////////////////////
     Range Alloc_s(size_t size) {
+      if (this->size() == 0) {
+        global_range.end = size;
+        return Range{0, size};
+      }
       Range rgx{0, size};
       for (int i = global_range.start; i < global_range.end; i++) {
         if (rgx < global_range && Exist(rgx)) {
@@ -130,6 +278,8 @@ namespace Virtual::Lib {
     std::map<std::string, size_t> _functions;
     std::map<std::string, VM_Processor> _externs_functions;
     std::map<std::string, Arena::Range> _vars;
+    std::stack<int> _deferred_calc;
+    std::stack<int> _stored_points;
     Arena _arena;
   public:
     ////////////////////////////////////////////////////////////
@@ -143,6 +293,12 @@ namespace Virtual::Lib {
     ////////////////////////////////////////////////////////////
     void BeginFunction(std::string name) {
       _functions.insert({name, Cursor()});
+    }
+
+    ////////////////////////////////////////////////////////////
+    void ClearFunction(std::string name) {
+      MewUserAssert(_functions.find("name") != _functions.end(), "undefined");
+      _functions.erase(name);
     }
 
     ////////////////////////////////////////////////////////////
@@ -175,15 +331,45 @@ namespace Virtual::Lib {
     }
 
     ////////////////////////////////////////////////////////////
+    uint GetAddressFunction(std::string name) {
+      auto _func = _functions.find(name);
+      MewUserAssert(_func == _functions.end(), "undefined");
+      return _func->second;
+    }
+
+    ////////////////////////////////////////////////////////////
+    void Add(std::string name, uint num) {
+      MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
+      auto range = _vars.at(name);
+      ++((*this) << Instruction_PUSH << Instruction_NUM << num);
+      ++((*this) << Instruction_PUSH << Instruction_RMEM << (uint)range.start);
+      ++((*this) << Instruction_ADD  << Instruction_MEM << Instruction_NUM);
+    }
+
+    ////////////////////////////////////////////////////////////
+    void Puti() {
+      ++((*this) << Instruction_PUTI);
+    }
+
+    ////////////////////////////////////////////////////////////
+    void Sub(std::string name, uint num) {
+      MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
+      auto range = _vars.at(name);
+      ++((*this) << Instruction_PUSH << Instruction_RMEM << (uint)range.start);
+      ++((*this) << Instruction_PUSH << Instruction_NUM << num);
+      ++((*this) << Instruction_SUB  << Instruction_RMEM << Instruction_NUM);
+    }
+
+    ////////////////////////////////////////////////////////////
     uint Assign(std::string name, size_t size, bool clear_memory = false) {
       MewUserAssert(_vars.find(name) == _vars.end(), "already assign");
       auto range = _arena.Alloc_s(size);
       _vars.insert({name, range});
       if (clear_memory) {
-        ++((*this) << Instruction_PUSH << (uint)range.start);
-        ++((*this) << Instruction_PUSH << (uint)(range.end-range.start));
-        ++((*this) << Instruction_PUSH << 0U);
-        ++((*this) << Instruction_MSET);
+        Push(Instruction_NUM, (uint)range.start);
+        Push(Instruction_NUM, range.size());
+        Push(Instruction_NUM, 0U);
+        Mset();
       }
       return range.start;
     }
@@ -196,6 +382,132 @@ namespace Virtual::Lib {
       _vars.erase(name);
     }
 
+    ////////////////////////////////////////////////////////////
+    void BeginDefer() {
+      _deferred_calc.push(AbsCursor());
+      ++(*this);
+    }
+
+    ////////////////////////////////////////////////////////////
+    void EndDefer() {
+      MewAssert(!_deferred_calc.empty());
+      uint cursor = _deferred_calc.top();
+      byte* row = actual_builder->at(cursor);
+      _deferred_calc.pop();
+      cursor = MEW_RM_ALIGN(cursor, 8);
+      uint aa=  Cursor();
+      int offset = Cursor() - cursor - VM_CODE_ALIGN;
+      memcpy(row, &offset, sizeof(offset));
+    }   
+
+    ////////////////////////////////////////////////////////////
+    void BeginBackJump() {
+      _stored_points.push(Cursor());
+    }
+
+    ////////////////////////////////////////////////////////////
+    void EndBackJump() {
+      MewAssert(!_stored_points.empty());
+      uint dest = _stored_points.top();
+      _stored_points.pop();
+      int offset = dest - (uint)Cursor() - VM_CODE_ALIGN;
+      ++((*this) << Instruction_JMP << offset);
+    }
+
+
+    ////////////////////////////////////////////////////////////
+    void Test(std::string name, int value) {
+      MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
+      auto range = _vars.at(name);
+      Push(Instruction_NUM, value); /* y */
+      Push(Instruction_MEM, (uint)range.start); /* x */
+      Test();
+    }
+
+    ////////////////////////////////////////////////////////////
+    void Pop() {
+      ++((*this) << Instruction_POP);
+    }
+
+    ////////////////////////////////////////////////////////////
+    void Pop(int count) {
+      for (int i = 0; i < count; i++) {
+        ++((*this) << Instruction_POP);
+      }
+    }
+
+    ////////////////////////////////////////////////////////////
+    void Test() {
+      ++((*this) << Instruction_TEST);
+    }
+
+    ////////////////////////////////////////////////////////////
+    void Push(byte type, int value) {
+      ++((*this) << Instruction_PUSH << type << value);
+    }
+
+    ////////////////////////////////////////////////////////////
+    void Push(byte type, uint value) {
+      ++((*this) << Instruction_PUSH << type << value);
+    }
+
+    void Mset() {
+      ++((*this) << Instruction_MSET);
+    }
+
+    void Ret() {
+      ++((*this) << Instruction_RET);
+    }
+
+    void Exit() {
+      ++((*this) << Instruction_EXIT);
+    }
+
+#pragma region conditional jumps
+
+    ////////////////////////////////////////////////////////////
+    void JumpIfLess(std::string name) {
+      uint address = GetAddressFunction(name);
+      int real_idx = Cursor() - address;
+      ++((*this) << Instruction_JL << real_idx);
+    }
+
+    ////////////////////////////////////////////////////////////
+    void JumpIfMore(std::string name) {
+      uint address = GetAddressFunction(name);
+      int real_idx = Cursor() - address;
+      ++((*this) << Instruction_JM << real_idx);
+    }
+
+    ////////////////////////////////////////////////////////////
+    void JumpIfEqual(std::string name) {
+      uint address = GetAddressFunction(name);
+      int real_idx = Cursor() - address;
+      ++((*this) << Instruction_JE << real_idx);
+    }
+
+    ////////////////////////////////////////////////////////////
+    void JumpIfEqualLess(std::string name) {
+      uint address = GetAddressFunction(name);
+      int real_idx = Cursor() - address;
+      ++((*this) << Instruction_JEL << real_idx);
+    }
+
+    ////////////////////////////////////////////////////////////
+    void JumpIfEqualMore(std::string name) {
+      uint address = GetAddressFunction(name);
+      int real_idx = Cursor() - address;
+      ++((*this) << Instruction_JEM << real_idx);
+    }
+
+    ////////////////////////////////////////////////////////////
+    void JumpIfNotEqual(std::string name) {
+      uint address = GetAddressFunction(name);
+      int real_idx = Cursor() - address;
+      ++((*this) << Instruction_JNE << real_idx);
+    }
+
+#pragma endregion
 
     ////////////////////////////////////////////////////////////
     const CodeBuilder& ActualBulder() noexcept {
@@ -210,6 +522,11 @@ namespace Virtual::Lib {
     ////////////////////////////////////////////////////////////
     const size_t Cursor() const noexcept {
       return (*actual_builder).code_size();
+    }
+
+    ////////////////////////////////////////////////////////////
+    const size_t AbsCursor() const noexcept {
+      return (*actual_builder).abs_code_size();
     }
 
     ////////////////////////////////////////////////////////////
@@ -285,6 +602,7 @@ namespace Virtual::Lib {
         buffer[i] = text[i];
       }
       (*actual_builder) += buffer;
+      
       return *this;
     }
 
@@ -293,14 +611,46 @@ namespace Virtual::Lib {
       gf(b);
       return b;
     }
+
+    ////////////////////////////////////////////////////////////
+    Code* Build() {
+      MewUserAssert(_deferred_calc.empty(), "close defered calcs");
+      Exit();
+      actual_builder->force_data(_arena.size());
+      Code* c = *(*actual_builder);
+      return c;
+    }
+  
+    ////////////////////////////////////////////////////////////
+    void Run() {
+      Code* c = Build();
+      Virtual::Visualizer::VisualizeToFile(c);
+      Virtual::Execute(*c);
+    }
   };
- 
 }
 
-namespace Tests {
-  bool test_Virtual_Lib_Construct() {
-    try {
 
+
+namespace Tests {
+  bool test_Virtual_Lib() {
+    try {
+      using namespace Virtual;
+      using namespace Virtual::Lib;
+      Builder b;
+      b.BeginFunction("main");
+      b.BeginFunction("l1");
+      b.Assign("i", sizeof(int), true);
+      b.BeginBackJump();
+      b.Test("i", 3);
+      ++(b << Instruction_JEL << 8U);
+      (b << Instruction_JMP);
+      b.BeginDefer();
+        b.Add("i", 1);
+        b.Puti();
+        b.EndBackJump();
+      b.EndDefer();
+      b.Run();
     } catch (std::exception e) {
       MewPrintError(e);
       return false;
@@ -308,97 +658,4 @@ namespace Tests {
     return true;
   }
 }
-
-namespace Virtual::Math {
-  using Builder = Virtual::Lib::Builder;
-  enum struct OperatorToken: byte {
-    None,
-    Plus, Minus, Divide, Multiply,
-    Con/*and*/,Dis/*or*/,Inv/*not*/, Xor
-  };
-
-  void _MathOp(Builder& b, OperatorToken op) {
-    switch (op) {
-      case OperatorToken::Plus:     b << Instruction_ADD; break;
-      case OperatorToken::Minus:    b << Instruction_SUB; break;
-      case OperatorToken::Multiply: b << Instruction_MUL; break;
-      case OperatorToken::Divide:   b << Instruction_DIV; break;
-      case OperatorToken::Con:      b << Instruction_AND; break;
-      case OperatorToken::Dis:      b << Instruction_OR;  break;
-      case OperatorToken::Xor:      b << Instruction_XOR; break;
-      case OperatorToken::Inv:      b << Instruction_NOT; break;
-    }
-  }
-
-  void base(Builder& b, OperatorToken op, int x) {
-    ++(b << Instruction_PUSH << Instruction_NUM << x);
-    _MathOp(b, op);
-    ++(b << Instruction_NUM << Instruction_NUM);
-  }
-
-  void base(Builder& b, OperatorToken op, int x, int y) {
-    ++(b << Instruction_PUSH << Instruction_NUM << x);
-    ++(b << Instruction_PUSH << Instruction_NUM << y);
-    _MathOp(b, op);
-    ++(b << Instruction_NUM << Instruction_NUM);
-  }
-
-  void base(Builder& b, OperatorToken op, int* x, int* y) {
-    if (y == nullptr) {
-      base(b, op, *x);
-    } else {
-      base(b, op, *x, *y);
-    }
-  }
-
-  void doMath(Builder& b, char* begin, char* end) {
-    int* x = nullptr;
-    int* y = nullptr;
-    OperatorToken op;
-    while (begin != end) {
-      char c = *(begin++);
-      if (c == ' ') {continue;}
-      if (isdigit(c)) {
-        char* num_beg = &c;
-        char* num_end = &c;
-        while (begin != end && isdigit(*(begin++))) {
-          num_end++;
-        }
-        if (x != nullptr) {
-          x = new int(0);
-          *x = strtol(num_beg, &num_end, 10);
-        } else {
-          y = new int(0);
-          *y = strtol(num_beg, &num_end, 10);
-        }
-
-        if (op != OperatorToken::None) { 
-          base(b, op, x, y);
-          x = nullptr;
-          y = nullptr;
-          op = OperatorToken::None;
-        }
-      } else {
-        switch (c) {
-          case '+': op = OperatorToken::Plus; break;
-          case '-': op = OperatorToken::Minus; break;
-          case '*': op = OperatorToken::Multiply; break;
-          case '/': op = OperatorToken::Divide; break;
-          case '&': op = OperatorToken::Con; break;
-          case '|': op = OperatorToken::Dis; break;
-          case '^': op = OperatorToken::Xor; break;
-          case '~': op = OperatorToken::Inv; break;
-        }
-      }
-    }
-  }
-
-  void doMath(Builder& b, const char* text) {
-    size_t size = strlen(text);
-    char* begin = (char*)text;
-    char* end = begin+size;
-  }
-
-};
-
 #endif

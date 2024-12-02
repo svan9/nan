@@ -38,6 +38,10 @@
 	puti -stack head-
 	puts <address:4b>
 	call <proc-idx:4b>
+	open -path- -flags- // todo
+	swst <idx:7b>
+	write
+	read
 ```
 > next addition float math 
 

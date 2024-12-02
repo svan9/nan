@@ -174,8 +174,8 @@ namespace Parser {
       it = stored_it;
       return false;
     }
-    parser.builder += (*it++).data;
     uint address = parser.builder.DataCursor();
+    parser.builder += (*it++).data;
     ++(parser.builder << Instruction_PUSH << Instruction_NUM << address);
     return true;
   }
@@ -382,7 +382,7 @@ namespace Parser {
   }
 
   bool Statement(Parser& parser, Iterator& it) {
-
+    
   }
   
   bool Line(Parser& parser, Iterator& it) {

@@ -11,7 +11,7 @@ extern const CONST_STREAM STROUT_STREAM @native;
 extern const char ENDL @native;
 
 // add or create class std
-expand class std;
+expand class std; 
 // add or create class console
 expand class console;
 
