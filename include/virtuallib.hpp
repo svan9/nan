@@ -361,14 +361,14 @@ namespace Virtual::Lib {
     }
 
     ////////////////////////////////////////////////////////////
-    uint Assign(std::string name, size_t size, bool clear_memory = false) {
+    uint Assign(std::string name, size_t size, bool clear_memory = false, const int value = 0) {
       MewUserAssert(_vars.find(name) == _vars.end(), "already assign");
       auto range = _arena.Alloc_s(size);
       _vars.insert({name, range});
       if (clear_memory) {
         Push(Instruction_NUM, (uint)range.start);
         Push(Instruction_NUM, range.size());
-        Push(Instruction_NUM, 0U);
+        Push(Instruction_NUM, (uint)value);
         Mset();
       }
       return range.start;
@@ -398,7 +398,7 @@ namespace Virtual::Lib {
       uint aa=  Cursor();
       int offset = Cursor() - cursor - VM_CODE_ALIGN;
       memcpy(row, &offset, sizeof(offset));
-    }   
+    }
 
     ////////////////////////////////////////////////////////////
     void BeginBackJump() {
@@ -414,6 +414,16 @@ namespace Virtual::Lib {
       ++((*this) << Instruction_JMP << offset);
     }
 
+    ////////////////////////////////////////////////////////////
+    void BeginJump() {
+      ((*this) << Instruction_JMP);
+      BeginDefer();
+    }
+
+    ////////////////////////////////////////////////////////////
+    void EndJump() {
+      EndDefer();
+    }
 
     ////////////////////////////////////////////////////////////
     void Test(std::string name, int value) {
@@ -422,6 +432,46 @@ namespace Virtual::Lib {
       Push(Instruction_NUM, value); /* y */
       Push(Instruction_MEM, (uint)range.start); /* x */
       Test();
+    }
+
+    ////////////////////////////////////////////////////////////
+    void BeginForI(std::string i_name, int i_init_val, int count_of_iter) {
+      /* 'int i = 0' */
+      /* reserve variable 'i' */
+      Assign(i_name, sizeof(int), true, i_init_val);
+      /* mark back jump dest */
+      BeginBackJump();
+      /* 'i < x' */
+      Test(i_name, count_of_iter-1);
+      ++((*this) << Instruction_JEL << VM_CODE_ALIGN);
+      /* defer out of 'for' */
+      BeginJump();
+      /* 'i++' */
+      Inc(i_name);
+    }
+
+    ////////////////////////////////////////////////////////////
+    void EndForI() {
+      /* repeat 'for' */
+      EndBackJump();
+      /* confirm last defer */
+      EndJump();
+    }
+
+    ////////////////////////////////////////////////////////////
+    void Inc(std::string name) {
+      MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
+      auto range = _vars.at(name);
+      ++((*this) << Instruction_PUSH << Instruction_RMEM << (uint)range.start);
+      ++((*this) << Instruction_INC  << Instruction_MEM);
+    }
+    
+    ////////////////////////////////////////////////////////////
+    void Dec(std::string name) {
+      MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
+      auto range = _vars.at(name);
+      ++((*this) << Instruction_PUSH << Instruction_RMEM << (uint)range.start);
+      ++((*this) << Instruction_DEC  << Instruction_MEM);
     }
 
     ////////////////////////////////////////////////////////////
@@ -627,10 +677,19 @@ namespace Virtual::Lib {
       Virtual::Visualizer::VisualizeToFile(c);
       Virtual::Execute(*c);
     }
+
+    ////////////////////////////////////////////////////////////
+    void Save(const char* path) {
+      Code* c = Build();
+      Code_SaveFromFile(*c, path);
+    }
+
+    ////////////////////////////////////////////////////////////
+    Code* Load(const char* path) {
+      return Code_LoadFromFile(path);
+    }
   };
 }
-
-
 
 namespace Tests {
   bool test_Virtual_Lib() {
@@ -639,17 +698,15 @@ namespace Tests {
       using namespace Virtual::Lib;
       Builder b;
       b.BeginFunction("main");
+      /* TEST 'for' */
       b.BeginFunction("l1");
-      b.Assign("i", sizeof(int), true);
-      b.BeginBackJump();
-      b.Test("i", 3);
-      ++(b << Instruction_JEL << 8U);
-      (b << Instruction_JMP);
-      b.BeginDefer();
-        b.Add("i", 1);
-        b.Puti();
-        b.EndBackJump();
-      b.EndDefer();
+      /* 'for (int i = 0; i < 10; i++)' */
+      b.BeginForI("i", 0, 10);
+      /*{*/
+      /* */ b.Puti();
+      /*}*/
+      b.EndForI();
+      b.Save("./vlib-for-10.nb");
       b.Run();
     } catch (std::exception e) {
       MewPrintError(e);

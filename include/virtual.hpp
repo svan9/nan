@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <windows.h>
+#include <fcntl.h>
 #include <vector>
 
 /*
@@ -44,10 +45,14 @@ namespace Virtual {
     Instruction_CALL,
     Instruction_PUSH,
     Instruction_POP,
+
     Instruction_ADD,
     Instruction_SUB,
     Instruction_MUL,
     Instruction_DIV,
+
+    Instruction_INC,
+    Instruction_DEC,
 
     Instruction_XOR,
     Instruction_OR,
@@ -84,6 +89,7 @@ namespace Virtual {
     Instruction_SWST,  // set used stream
     Instruction_WRITE, // write to used stream
     Instruction_READ,  // read used stream
+    Instruction_OPEN,  // open file as destinator
 
     Instruction_PUTC,
     Instruction_PUTI,
@@ -293,6 +299,7 @@ namespace Virtual {
     std::stack<byte*> begin_stack;
     std::vector<VM_Processor> procs;
     // std::vector<void*> libs_funcs;
+    FILE* r_stream;
     byte test;
     byte status;
   };
@@ -452,6 +459,26 @@ namespace Virtual {
     byte* mem;
     VM_MathBase(vm, line, (uint*)&x, (uint*)&y, &mem);
     x /= y;
+    VM_ManualPush(vm, x);
+    if (line[1] == Instruction_MEM) {
+      memcpy(mem, &x, sizeof(x));
+    }
+  }
+  void VM_Inc(VirtualMachine& vm, byte* line) {
+    uint x;
+    byte* mem;
+    VM_StackTop(vm, line[1], &x, &mem);
+    x++;
+    VM_ManualPush(vm, x);
+    if (line[1] == Instruction_MEM) {
+      memcpy(mem, &x, sizeof(x));
+    }
+  }
+  void VM_Dec(VirtualMachine& vm, byte* line) {
+    uint x;
+    byte* mem;
+    VM_StackTop(vm, line[1], &x, &mem);
+    x--;
     VM_ManualPush(vm, x);
     if (line[1] == Instruction_MEM) {
       memcpy(mem, &x, sizeof(x));
@@ -629,11 +656,11 @@ namespace Virtual {
   }
   
   void VM_Puti(VirtualMachine& vm, byte* line) {
-    int x; 
+    int x;
     VM_StackTop(vm, line[1], (uint*)&x);
     char str[12] = {0};
     itoa(x, str, 10);
-    puts(str);
+    fputs(str, stdout);
   }
 
   void VM_Puts(VirtualMachine& vm, byte* line) {
@@ -647,16 +674,47 @@ namespace Virtual {
     }
   }
 
+  void VM_Open(VirtualMachine& vm, byte* line) {
+    uint offset;
+    memcpy(&offset, line+1, sizeof(uint));
+    MewUserAssert(vm.heap+offset < vm.end, "out of memory");
+    byte* pointer = vm.heap+offset;
+    char* begin = (char*)pointer;
+    int flags;
+    VM_StackTop(vm, line[4], (uint*)&flags);
+    int dest = open(begin, flags);
+    VM_ManualPush(vm, dest);
+  }
+
   void VM_Swst(VirtualMachine& vm, byte* line) {
-    MewNotImpl();
+    int idx;
+    bool use_stack;
+    memcpy(&use_stack, line+1, sizeof(use_stack));
+    if (use_stack) {
+      VM_StackTop(vm, line[2], (uint*)&idx);
+    } else {
+      memcpy(&idx, line+2, sizeof(idx));
+    }
+    vm.r_stream = fdopen(idx, "r+");
   }
   
   void VM_Write(VirtualMachine& vm, byte* line) {
-    MewNotImpl();
+    uint offset;
+    memcpy(&offset, line+1, sizeof(uint));
+    MewUserAssert(vm.heap+offset < vm.end, "out of memory");
+    byte* pointer = vm.heap+offset;
+    fputws((wchar_t*)pointer, vm.r_stream);
   }
   
   void VM_Read(VirtualMachine& vm, byte* line) {
-    MewNotImpl();
+    uint offset;
+    memcpy(&offset, line+1, sizeof(uint));
+    MewUserAssert(vm.heap+offset < vm.end, "out of memory");
+    byte* pointer = vm.heap+offset;
+    short int chunk_size;
+    memcpy(&chunk_size, line+1+sizeof(uint), sizeof(chunk_size));
+    MewUserAssert(vm.heap+offset+(chunk_size*2) < vm.end, "out of memory (chunk too big)");
+    fgetws((wchar_t*)pointer, chunk_size, vm.r_stream);
   }
 
   void RunLine(VirtualMachine& vm, byte* line) {
@@ -680,6 +738,12 @@ namespace Virtual {
       } break;
       case Instruction_DIV: {
         VM_Div(vm, line);
+      } break;
+      case Instruction_INC: {
+        VM_Inc(vm, line);
+      } break;
+      case Instruction_DEC: {
+        VM_Dec(vm, line);
       } break;
       case Instruction_XOR: {
         VM_Xor(vm, line);
@@ -749,6 +813,9 @@ namespace Virtual {
       } break;
       case Instruction_READ: {
         VM_Read(vm, line);
+      } break;
+      case Instruction_OPEN: {
+        VM_Open(vm, line);
       } break;
       case Instruction_EXIT: {
         vm.status = VM_Status_Ret;
@@ -896,6 +963,23 @@ namespace Virtual {
       cb._data_size += __rsize;
       return cb;
     }
+    friend CodeBuilder& operator+(CodeBuilder& cb, const char* text) {
+      size_t __size = strlen(text);
+      size_t __rsize = (__size+1)*sizeof(char);
+      if (!cb.data) {
+        cb.data = new byte[__rsize];
+      } else {
+        byte* __new = new byte[cb._data_size+__rsize];
+        memcpy(__new, cb.data, cb._data_size);
+        byte* __old = cb.data; 
+        cb.data = __new;
+        free(__old);
+      }
+      memset(cb.data+(cb._data_size*sizeof(char)), 0, __rsize);
+      memcpy(cb.data+(cb._data_size*sizeof(char)), text, __rsize);
+      cb._data_size += __rsize;
+      return cb;
+    }
     friend CodeBuilder& operator+(CodeBuilder& cb, const wchar_t* text) {
       size_t __size = wcslen(text);
       size_t __rsize = (__size+1)*sizeof(wchar_t);
@@ -915,6 +999,9 @@ namespace Virtual {
     }
 
     CodeBuilder& operator+=(const wchar_t* text) {
+      return (*this)+text;
+    }
+    CodeBuilder& operator+=(const char* text) {
       return (*this)+text;
     }
     CodeBuilder& operator+=(CodeBuilder& i) {

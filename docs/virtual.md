@@ -22,6 +22,8 @@
 	sub <type:1b> <type:1b>
 	mul <type:1b> <type:1b>
 	div <type:1b> <type:1b>
+	inc <type:1b>
+	dec <type:1b>
 	xor <type:1b> <type:1b>
 	or  <type:1b> <type:1b>
 	not <type:1b>
@@ -38,10 +40,14 @@
 	puti -stack head-
 	puts <address:4b>
 	call <proc-idx:4b>
-	open -path- -flags- // todo
-	swst <idx:7b>
-	write
-	read
+	open -path- -flags-
+	swst <?use_stack:1b> <idx:4b>
+	| swst 'true' <stack_type:1b> 
+	| swst 'false' <idx:4b>
+	write <address:4b>
+	read <address:4b> <chunsize:2b>
+		!uses simple char for path
+	open <address:4b> <flag_type:1b> -file_flags:4b-  
 ```
 > next addition float math 
 
