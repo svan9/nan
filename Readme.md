@@ -2,7 +2,7 @@
 ![C++](https://img.shields.io/badge/cpp-blue)
 ![CMake](https://img.shields.io/badge/cmake-blue)
 ![GitHub last commit](https://img.shields.io/github/last-commit/svan9/nan)
-![GitHub commit activity](https://img.shields.io/github/commit-activity/d/svan9/nan)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/m/svan9/nan)
 ![GitHub License](https://img.shields.io/github/license/svan9/nan)
 ![GitHub Repo stars](https://img.shields.io/github/stars/svan9/nan)
 
