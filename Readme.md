@@ -24,6 +24,11 @@ ___Nan Language___ compiler for ___Nan Virtual Machine___. Also includes own ___
 
 ### code-docs
 See [/nan](/nan) for in code documentation
+* std::console - [/nan/write.nan](/nan/write.nan)
+* std::allocator - [/nan/allocator.nan](/nan/allocator.nan)
+* test std  - [/nan/test_std.nan](/nan/test_std.nan)
+* test preprocessing  - [/nan/preprocess.nan](/nan/preprocess.nan)
+* test pointers  - [/nan/pointers.nan](/nan/pointers.nan)
 
 # References 
 - [virtual.hpp](./docs/virtual.md)
