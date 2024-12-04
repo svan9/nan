@@ -382,7 +382,6 @@ namespace Parser {
   }
 
   bool Statement(Parser& parser, Iterator& it) {
-    
   }
   
   bool Line(Parser& parser, Iterator& it) {

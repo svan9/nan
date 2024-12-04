@@ -1,0 +1,55 @@
+use std;
+
+// type 'heap_offset'
+// heap_offset == mem_range
+
+// 'new'
+// heap_offset new(size); 
+// heap_offset new(size, fill); 
+// - param size {uint} - needs byte for allocate 
+// - param fill {int} - filling value
+
+// 'sizeof'
+// uint sizeof(type); 
+// uint sizeof(pointer); 
+// uint sizeof(type, pointer); ?- gets count of cells 
+// - param type {#type} - declared type 
+// - param pointer {heap_offset} - pointer to memory
+
+// type 'mem_range'
+// mem_range(init_byte_size?)
+// - param init_byte_size {uint} - size of allocate bytes 
+// - param init_byte_size(optional) {uint} - size of allocate bytes 
+// mem_range(mem_range&, init_byte_size)
+// - param mem_range {mem_range} - old range
+// - param init_byte_size {uint} - size of allocate bytes 
+
+entry {
+	// static array
+	int* st_array = new(10*sizeof(int));
+	// all pointer native has range-type 
+	// u can get real size of pointer
+	uint size_of_sta = sizeof(int, st_array);
+	uint byte_size_of_sta = sizeof(st_array);
+	for (int i = 0; i < size_of_sta; i++) {
+		// typed memory set
+		st_array[i] = i;
+	}
+	for (int i = 0; i < byte_size_of_sta; i++) {
+		// untyped memory set
+		// convert all types to byte for set
+		st_array![i] = i;
+	}
+	mem_range dyn_array(10);
+	// has foreach iterator
+	foreach (byte& x: mem_range) {
+		// u can real set
+		// local.idx = index of iteration 
+		x = local.idx;
+	}
+	// add 1 byte
+	dyn_array.realoc(mem_range.size+1);
+	// u can set by negative index
+	dyn_array[-1] = 1;
+	return OK(); // all is free if its main entry
+}

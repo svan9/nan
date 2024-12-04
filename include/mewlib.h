@@ -1,7 +1,12 @@
 #ifndef MewLib_IMPL
 #define MewLib_IMPL
 
-#define MEW_NO_RELEASE
+#ifndef MEW_NO_RELEASE
+	#define MEW_NO_RELEASE
+#endif
+#ifndef MEW_USE_THROWS
+	#define MEW_USE_THROWS
+#endif
 
 #ifndef MEW_NO_RELEASE
 	#ifndef DEBUG
@@ -9,10 +14,17 @@
 	#endif
 #endif
 
+#if defined(__cplusplus) && __cplusplus >= 202002L
+	#define __CXX20
+#endif
+
 #ifndef NULLVAL
 #define NULLVAL ((void)0)
 #endif
 
+#ifdef __cplusplus
+	#include <exception>
+#endif
 #include <stdlib.h>
 
 #ifdef RELEASE
@@ -23,10 +35,24 @@
 		printf("\nAssert failed at %s:%i, %s(...)\n  With expression (%s)\n  `%s`", file, line, func, strexpr, message);
 	#define __mewassert_nm(strexpr, file, line, func) \
 		printf("\nAssert failed at %s:%i, %s(...)\n  With expression (%s)\n", file, line, func, strexpr);
+	#define __mewassert_r(strexpr, message, file, line, func) \
+		"\nAssert failed at %s:%i, %s(...)\n  With expression (%s)\n  `%s`", file, line, func, strexpr, message
+	#define __mewassert_nm_r(strexpr, file, line, func) \
+		"\nAssert failed at %s:%i, %s(...)\n  With expression (%s)\n", file, line, func, strexpr
 #endif
 
-#define MewUserAssert(expr, message) if (!(expr)) {__mewassert(#expr, message, __FILE__, __LINE__, __func__); exit(1); }
-#define MewAssert(expr) if (!(expr)) {__mewassert_nm(#expr, __FILE__, __LINE__, __func__); exit(1); }
+#if defined(MEW_USE_THROWS) && __cplusplus
+	#define MewUserAssert(expr, message) \
+		if (!(expr)) {\
+			__mewassert(#expr, message, __FILE__, __LINE__, __func__); exit(1); }
+	#define MewAssert(expr) \
+		if (!(expr)) {__mewassert_nm(#expr, __FILE__, __LINE__, __func__); exit(1); }
+#else
+	#define MewUserAssert(expr, message) \
+		if (!(expr)) {__mewassert(#expr, message, __FILE__, __LINE__, __func__); exit(1); }
+	#define MewAssert(expr) \
+		if (!(expr)) {__mewassert_nm(#expr, __FILE__, __LINE__, __func__); exit(1); }
+#endif
 #define MewNot() MewUserAssert(false, "not")
 #define MewNoImpl() MewUserAssert(false, "not implemented")
 #define MewNotImpl() MewUserAssert(false, "not implemented")
@@ -67,10 +93,6 @@
 
 	#include <string.h>
 	#include <concepts>
-
-	#if __cplusplus >= 202002L
-		#define __CXX20
-	#endif
 
 char *ansi(wchar_t *unicode) {
 	size_t size = wcslen(unicode);
@@ -124,6 +146,18 @@ namespace mew {
 	concept same_as = std::same_as<ClearType<VF>, ClearType<VS>>;
 
 #endif
+	class Error: public std::exception {
+	private:
+		std::string msg;
+	public:
+		Error() {
+			
+		}
+
+    const char* what() const throw() {
+			return msg.c_str();
+    }
+	};
 
 namespace string {
 	class StringIterator {

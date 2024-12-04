@@ -22,7 +22,9 @@ ___Nan Language___ compiler for ___Nan Virtual Machine___. Also includes own ___
 
 > VM uses _virtual_ namespace. VM Lib uses _virtual::lib_ namespace
 
+### code-docs
+See [/nan](/nan) for in code documentation
 
 # References 
-- [Virtual.hpp](./docs/virtual.md)
+- [virtual.hpp](./docs/virtual.md)
 - [mewlib.h](./docs/mewlib.md)
