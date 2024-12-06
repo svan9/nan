@@ -4,7 +4,10 @@
 ![GitHub last commit](https://img.shields.io/github/last-commit/svan9/nan)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/svan9/nan)
 ![GitHub License](https://img.shields.io/github/license/svan9/nan)
-![GitHub Repo stars](https://img.shields.io/github/stars/svan9/nan)
+![GitHub User's stars](https://img.shields.io/github/stars/svan9)
+![GitHub watchers](https://img.shields.io/github/watchers/svan9/nan)
+
+
 
 ___Nan Language___ compiler for ___Nan Virtual Machine___. Also includes own ___Nan Virtual Machine___. Uses _cmake_ for build. Binary ___nan___ ([./src](./src)) - test (in the future, a complete compiler for ___Nan Language___). Binary ___nanvm___ ([./vm](./vm)) - Nan Virtual Machine executable for `*.nb` file ak binary nvm files.
 
