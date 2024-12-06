@@ -32,22 +32,21 @@
 	rs  <type:1b> <type:1b>
 	jmp <offset:4b>
 	ret -no args-
-	test -no args-
+	test <type:1b> <type:1b>
 	j<if> <offset:4b>
 	mov <type:1b> <address:4b>
-	mset -start- -size- -value- 
+	mset <start> <size> <value> 
 	putc <char:2b>
 	puti -stack head-
 	puts <address:4b>
 	call <proc-idx:4b>
-	open -path- -flags-
 	swst <?use_stack:1b> <idx:4b>
-	| swst 'true' <stack_type:1b> 
+	| swst 'true' <stack_type:1b> -idx:4b-
 	| swst 'false' <idx:4b>
 	write <address:4b>
 	read <address:4b> <chunsize:2b>
 		!uses simple char for path
-	open <address:4b> <flag_type:1b> -file_flags:4b-  
+	open <address:4b> <flags:4b>
 ```
 > next addition float math 
 

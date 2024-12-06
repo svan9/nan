@@ -6,7 +6,9 @@
 #include <vector>
 #include <map>
 #include <string>
+#include "mewstack.hpp"
 
+#if 0
 namespace Virtual::Visualizer {
   using namespace Virtual;
 
@@ -66,6 +68,12 @@ namespace Virtual::Visualizer {
       } break;
       case Instruction_RET: {
         str << "ret\n";
+      } break;
+      case Instruction_INC: {
+        str << "inc "<< VType(line[1]) <<"\n";
+      } break;
+      case Instruction_DEC: {
+        str << "dec "<< VType(line[1]) <<"\n";
       } break;
       case Instruction_TEST: {
         str << "test\n";
@@ -146,6 +154,8 @@ namespace Virtual::Visualizer {
 
 };
 
+#endif
+
 namespace Virtual::Lib {
   class Builder;
   typedef void(*generator_t)(Builder&);
@@ -163,7 +173,7 @@ namespace Virtual::Lib {
 
       Range operator++(int) {
         Range r(*this);
-        ++(*this);
+        (*this);
         return r;
       }
 
@@ -224,7 +234,7 @@ namespace Virtual::Lib {
         if (r == range) { 
           Free(i);
           return;
-        } i++;
+        } i;
       }
     }
     
@@ -241,12 +251,12 @@ namespace Virtual::Lib {
     ////////////////////////////////////////////////////////////
     Range Alloc(size_t size) {
       Range rgx{0, size};
-      for (int i = global_range.start; i < global_range.end; i++) {
+      for (int i = global_range.start; i < global_range.end; i) {
         if (rgx < global_range && Exist(rgx)) {
           uses.push_back(rgx);
           return uses.back();
         }
-        ++rgx;
+        rgx;
       }
       MewUserAssert(false, "cannot allocate");
     }
@@ -258,12 +268,12 @@ namespace Virtual::Lib {
         return Range{0, size};
       }
       Range rgx{0, size};
-      for (int i = global_range.start; i < global_range.end; i++) {
+      for (int i = global_range.start; i < global_range.end; i) {
         if (rgx < global_range && Exist(rgx)) {
           uses.push_back(rgx);
           return uses.back();
         }
-        ++rgx;
+        rgx;
       }
       rgx.start = global_range.end;
       global_range.end += size;
@@ -278,7 +288,7 @@ namespace Virtual::Lib {
     std::map<std::string, size_t> _functions;
     std::map<std::string, VM_Processor> _externs_functions;
     std::map<std::string, Arena::Range> _vars;
-    std::stack<int> _deferred_calc;
+    mew::stack<uint> _deferred_calc;
     std::stack<int> _stored_points;
     Arena _arena;
   public:
@@ -303,18 +313,18 @@ namespace Virtual::Lib {
 
     ////////////////////////////////////////////////////////////
     void EndFunction() {
-      ++((*this) << Instruction_RET);
+      ((*this) << Instruction_RET);
     }
 
     ////////////////////////////////////////////////////////////
     void Jump(size_t line) {
       int real_idx = Cursor() - line;
-      ++((*this) << Instruction_JMP << real_idx);
+      ((*this) << Instruction_JMP << real_idx);
     }
 
     ////////////////////////////////////////////////////////////
     void CallExternFunction(size_t idx) {
-      ++((*this) << Instruction_CALL << (uint)idx);
+      ((*this) << Instruction_CALL << (uint)idx);
     }
 
     ////////////////////////////////////////////////////////////
@@ -341,23 +351,23 @@ namespace Virtual::Lib {
     void Add(std::string name, uint num) {
       MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
       auto range = _vars.at(name);
-      ++((*this) << Instruction_PUSH << Instruction_NUM << num);
-      ++((*this) << Instruction_PUSH << Instruction_RMEM << (uint)range.start);
-      ++((*this) << Instruction_ADD  << Instruction_MEM << Instruction_NUM);
+      ((*this) << Instruction_PUSH << Instruction_NUM << num);
+      ((*this) << Instruction_PUSH << Instruction_RMEM << (uint)range.start);
+      ((*this) << Instruction_ADD  << Instruction_MEM << Instruction_NUM);
     }
 
     ////////////////////////////////////////////////////////////
-    void Puti() {
-      ++((*this) << Instruction_PUTI);
+    void Puti(Instruction type = Instruction_NUM) {
+      ((*this) << Instruction_PUTI << type);
     }
 
     ////////////////////////////////////////////////////////////
     void Sub(std::string name, uint num) {
       MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
       auto range = _vars.at(name);
-      ++((*this) << Instruction_PUSH << Instruction_RMEM << (uint)range.start);
-      ++((*this) << Instruction_PUSH << Instruction_NUM << num);
-      ++((*this) << Instruction_SUB  << Instruction_RMEM << Instruction_NUM);
+      ((*this) << Instruction_PUSH << Instruction_RMEM << (uint)range.start);
+      ((*this) << Instruction_PUSH << Instruction_NUM << num);
+      ((*this) << Instruction_SUB  << Instruction_RMEM << Instruction_NUM);
     }
 
     ////////////////////////////////////////////////////////////
@@ -366,10 +376,7 @@ namespace Virtual::Lib {
       auto range = _arena.Alloc_s(size);
       _vars.insert({name, range});
       if (clear_memory) {
-        Push(Instruction_NUM, (uint)range.start);
-        Push(Instruction_NUM, range.size());
-        Push(Instruction_NUM, (uint)value);
-        Mset();
+        Mset(range.start, range.size(), value);
       }
       return range.start;
     }
@@ -384,20 +391,32 @@ namespace Virtual::Lib {
 
     ////////////////////////////////////////////////////////////
     void BeginDefer() {
-      _deferred_calc.push(AbsCursor());
-      ++(*this);
+      _deferred_calc.push(Cursor()-sizeof(uint));
     }
 
     ////////////////////////////////////////////////////////////
-    void EndDefer() {
-      MewAssert(!_deferred_calc.empty());
-      uint cursor = _deferred_calc.top();
-      byte* row = actual_builder->at(cursor);
-      _deferred_calc.pop();
-      cursor = MEW_RM_ALIGN(cursor, 8);
-      uint aa=  Cursor();
-      int offset = Cursor() - cursor - VM_CODE_ALIGN;
+    inline void __EndDefer(byte* row, uint cursor) {
+      int offset = Cursor() - cursor - sizeof(uint);
+      if (offset < 0) {
+        offset += sizeof(uint)/2;
+      }
       memcpy(row, &offset, sizeof(offset));
+    }
+    ////////////////////////////////////////////////////////////
+    void EndDefer() {
+      MewUserAssert(!_deferred_calc.empty(), "undefined");
+      uint cursor = _deferred_calc.pop();
+      byte* row = actual_builder->at(cursor);
+      __EndDefer(row, cursor);
+    }
+
+    ////////////////////////////////////////////////////////////
+    void EndDefer(int idx) {
+      MewUserAssert(_deferred_calc.has(idx), "undefined");
+      uint cursor = _deferred_calc.at(idx);
+      byte* row = actual_builder->at(cursor);
+      _deferred_calc.erase(idx);
+      __EndDefer(row, cursor);
     }
 
     ////////////////////////////////////////////////////////////
@@ -410,14 +429,19 @@ namespace Virtual::Lib {
       MewAssert(!_stored_points.empty());
       uint dest = _stored_points.top();
       _stored_points.pop();
-      int offset = dest - (uint)Cursor() - VM_CODE_ALIGN;
-      ++((*this) << Instruction_JMP << offset);
+      int offset = dest - (uint)Cursor() - (sizeof(uint)+1);
+      ((*this) << Instruction_JMP << offset);
     }
 
     ////////////////////////////////////////////////////////////
     void BeginJump() {
-      ((*this) << Instruction_JMP);
+      ((*this) << Instruction_JMP << 0U);
       BeginDefer();
+    }
+
+    ////////////////////////////////////////////////////////////
+    void EndJump(int idx) {
+      EndDefer(idx);
     }
 
     ////////////////////////////////////////////////////////////
@@ -431,7 +455,7 @@ namespace Virtual::Lib {
       auto range = _vars.at(name);
       Push(Instruction_NUM, value); /* y */
       Push(Instruction_MEM, (uint)range.start); /* x */
-      Test();
+      Test(Instruction_MEM, Instruction_NUM);
     }
 
     ////////////////////////////////////////////////////////////
@@ -443,74 +467,79 @@ namespace Virtual::Lib {
       BeginBackJump();
       /* 'i < x' */
       Test(i_name, count_of_iter-1);
-      ++((*this) << Instruction_JEL << VM_CODE_ALIGN);
-      /* defer out of 'for' */
-      BeginJump();
-      /* 'i++' */
+      ((*this) << Instruction_JM << 0U);
+      BeginDefer();
+      /* 'i' */
       Inc(i_name);
     }
 
     ////////////////////////////////////////////////////////////
-    void EndForI() {
+    void EndForI(std::string i_name) {
       /* repeat 'for' */
       EndBackJump();
       /* confirm last defer */
-      EndJump();
+      EndDefer();
+      /* free 'i' */
+      Destroy(i_name);
     }
 
     ////////////////////////////////////////////////////////////
     void Inc(std::string name) {
       MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
       auto range = _vars.at(name);
-      ++((*this) << Instruction_PUSH << Instruction_RMEM << (uint)range.start);
-      ++((*this) << Instruction_INC  << Instruction_MEM);
+      ((*this) << Instruction_PUSH << Instruction_RMEM << (uint)range.start);
+      ((*this) << Instruction_INC  << Instruction_MEM);
     }
     
     ////////////////////////////////////////////////////////////
     void Dec(std::string name) {
       MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
       auto range = _vars.at(name);
-      ++((*this) << Instruction_PUSH << Instruction_RMEM << (uint)range.start);
-      ++((*this) << Instruction_DEC  << Instruction_MEM);
+      ((*this) << Instruction_PUSH << Instruction_RMEM << (uint)range.start);
+      ((*this) << Instruction_DEC  << Instruction_MEM);
     }
 
     ////////////////////////////////////////////////////////////
     void Pop() {
-      ++((*this) << Instruction_POP);
+      ((*this) << Instruction_POP);
     }
 
     ////////////////////////////////////////////////////////////
     void Pop(int count) {
-      for (int i = 0; i < count; i++) {
-        ++((*this) << Instruction_POP);
+      for (int i = 0; i < count; i) {
+        ((*this) << Instruction_POP);
       }
     }
 
     ////////////////////////////////////////////////////////////
-    void Test() {
-      ++((*this) << Instruction_TEST);
+    void Test(byte t1, byte t2) {
+      ((*this) << Instruction_TEST << t1 << t2);
     }
 
     ////////////////////////////////////////////////////////////
     void Push(byte type, int value) {
-      ++((*this) << Instruction_PUSH << type << value);
+      ((*this) << Instruction_PUSH << type << value);
     }
 
     ////////////////////////////////////////////////////////////
     void Push(byte type, uint value) {
-      ++((*this) << Instruction_PUSH << type << value);
+      ((*this) << Instruction_PUSH << type << value);
+    }
+
+    void Mset(uint size, uint start, uint value) {
+      ((*this) << Instruction_MSET << size << start << value);
     }
 
     void Mset() {
-      ++((*this) << Instruction_MSET);
+      ((*this) << Instruction_MSET);
     }
 
     void Ret() {
-      ++((*this) << Instruction_RET);
+      ((*this) << Instruction_RET);
     }
 
     void Exit() {
-      ++((*this) << Instruction_EXIT);
+      ((*this) << Instruction_EXIT);
     }
 
 #pragma region conditional jumps
@@ -519,42 +548,42 @@ namespace Virtual::Lib {
     void JumpIfLess(std::string name) {
       uint address = GetAddressFunction(name);
       int real_idx = Cursor() - address;
-      ++((*this) << Instruction_JL << real_idx);
+      ((*this) << Instruction_JL << real_idx);
     }
 
     ////////////////////////////////////////////////////////////
     void JumpIfMore(std::string name) {
       uint address = GetAddressFunction(name);
       int real_idx = Cursor() - address;
-      ++((*this) << Instruction_JM << real_idx);
+      ((*this) << Instruction_JM << real_idx);
     }
 
     ////////////////////////////////////////////////////////////
     void JumpIfEqual(std::string name) {
       uint address = GetAddressFunction(name);
       int real_idx = Cursor() - address;
-      ++((*this) << Instruction_JE << real_idx);
+      ((*this) << Instruction_JE << real_idx);
     }
 
     ////////////////////////////////////////////////////////////
     void JumpIfEqualLess(std::string name) {
       uint address = GetAddressFunction(name);
       int real_idx = Cursor() - address;
-      ++((*this) << Instruction_JEL << real_idx);
+      ((*this) << Instruction_JEL << real_idx);
     }
 
     ////////////////////////////////////////////////////////////
     void JumpIfEqualMore(std::string name) {
       uint address = GetAddressFunction(name);
       int real_idx = Cursor() - address;
-      ++((*this) << Instruction_JEM << real_idx);
+      ((*this) << Instruction_JEM << real_idx);
     }
 
     ////////////////////////////////////////////////////////////
     void JumpIfNotEqual(std::string name) {
       uint address = GetAddressFunction(name);
       int real_idx = Cursor() - address;
-      ++((*this) << Instruction_JNE << real_idx);
+      ((*this) << Instruction_JNE << real_idx);
     }
 
 #pragma endregion
@@ -589,18 +618,6 @@ namespace Virtual::Lib {
     
     ////////////////////////////////////////////////////////////
     const Code& operator*() { return Release(); }
-
-    ////////////////////////////////////////////////////////////
-    Builder& operator++(int) { 
-      (*actual_builder)++;
-      return *this;
-    }
-    
-    ////////////////////////////////////////////////////////////
-    Builder& operator++() {
-      (*actual_builder)++;
-      return *this; 
-    }
 
     ////////////////////////////////////////////////////////////
     friend Builder& operator<<(Builder& b, CodeBuilder& gf) {
@@ -648,7 +665,7 @@ namespace Virtual::Lib {
     Builder& operator+=(const char* text) {
       size_t length = strlen(text)+1;
       wchar_t* buffer = new wchar_t[length];
-      for (int i = 0; i < length; i++) {
+      for (int i = 0; i < length; i) {
         buffer[i] = text[i];
       }
       (*actual_builder) += buffer;
@@ -674,7 +691,7 @@ namespace Virtual::Lib {
     ////////////////////////////////////////////////////////////
     void Run() {
       Code* c = Build();
-      Virtual::Visualizer::VisualizeToFile(c);
+      // Virtual::Visualizer::VisualizeToFile(c);
       Virtual::Execute(*c);
     }
 
@@ -700,12 +717,12 @@ namespace Tests {
       b.BeginFunction("main");
       /* TEST 'for' */
       b.BeginFunction("l1");
-      /* 'for (int i = 0; i < 10; i++)' */
+      /* 'for (int i = 0; i < 10; i)' */
       b.BeginForI("i", 0, 10);
       /*{*/
       /* */ b.Puti();
       /*}*/
-      b.EndForI();
+      b.EndForI("i");
       b.Save("./vlib-for-10.nb");
       b.Run();
     } catch (std::exception e) {

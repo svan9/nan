@@ -10,6 +10,7 @@
 #include <windows.h>
 #include <fcntl.h>
 #include <vector>
+// #include "dlllib.hpp"
 
 /*
 Reference
@@ -85,7 +86,7 @@ namespace Virtual {
     Instruction_JM,
     Instruction_MOV,  // replace head data from stack to memory
     Instruction_MSET,
-    
+
     Instruction_SWST,  // set used stream
     Instruction_WRITE, // write to used stream
     Instruction_READ,  // read used stream
@@ -96,7 +97,7 @@ namespace Virtual {
     Instruction_PUTS,
   };
 
-  #define VIRTUAL_VERSION (Instruction_PUTS*100)+44
+  #define VIRTUAL_VERSION (Instruction_PUTS*100)+0x30
 
   struct Code {
     size_t capacity;
@@ -289,6 +290,10 @@ namespace Virtual {
 
 #pragma region VM
 
+  enum VM_flags {
+    None = 0,
+    HeapLockExecute = 1 << 1,
+  };
 
   struct VirtualMachine {
     size_t capacity;
@@ -302,6 +307,7 @@ namespace Virtual {
     FILE* r_stream;
     byte test;
     byte status;
+    VM_flags flags = HeapLockExecute;
   };
 
   #ifndef VM_ALLOC_ALIGN
@@ -347,38 +353,39 @@ namespace Virtual {
     vm.stack.push(x);
   }
 
-  void VM_Push(VirtualMachine& vm, byte* line) {
-    byte head_byte = line[1];
+  void VM_Push(VirtualMachine& vm) {
+    byte head_byte = *vm.begin++;
     switch (head_byte) {
       case 0:
       case Instruction_FLT:
       case Instruction_NUM: {
         uint number = 0;
-        memcpy(&number, line+2, sizeof(number));
+        memcpy(&number, vm.begin, sizeof(number));
         vm.stack.push(number);
+        vm.begin += sizeof(number);
       } break;
       case Instruction_MEM: {
         uint number = 0;
-        memcpy(&number, line+2, sizeof(number));
+        memcpy(&number, vm.begin, sizeof(number));
         MewUserAssert(vm.heap+number < vm.end, "out of memory");
         byte* pointer = vm.heap+number;
         uint x; memcpy(&x, pointer, sizeof(x));
         vm.stack.push(x);
+        vm.begin += sizeof(number);
       } break;
       case Instruction_RMEM: {
         uint number = 0;
-        memcpy(&number, line+2, sizeof(number));
+        memcpy(&number, vm.begin, sizeof(number));
         MewUserAssert(vm.heap+number < vm.end, "out of memory");
-        // byte* pointer = vm.heap+number;
-        // uint x; memcpy(&x, pointer, sizeof(x));
         vm.stack.push(number);
+        vm.begin += sizeof(number);
       } break;
 
       default: MewNot(); break;
     }
   }
   
-  void VM_Pop(VirtualMachine& vm, byte* line) {
+  void VM_Pop(VirtualMachine& vm) {
     MewAssert(!vm.stack.empty());
     vm.stack.pop();
   }
@@ -390,7 +397,6 @@ namespace Virtual {
       case Instruction_NUM: {
         MewUserAssert(!vm.stack.empty(), "stack is empty");
         uint _top = vm.stack.top();
-        // *x = _top;
         memmove(x, &_top, sizeof(_top));
       } break;
       case Instruction_MEM: {
@@ -410,137 +416,198 @@ namespace Virtual {
     vm.stack.pop();
   }
 
-  void VM_Call(VirtualMachine& vm, byte* line) {
-    uint x; /* storage processors idx */
-    memcpy(&x, line, sizeof(x));
-    MewUserAssert(x < vm.procs.size(), "cannot find loaded proccessor by idx");
-    auto proc = vm.procs.at(x);
-    proc(vm, line);
+  void VM_Call(VirtualMachine& vm) {
+    MewNotImpl();
   }
+// todo 
+#if 0
+  void VM_Call(VirtualMachine& vm) {
+    int argc; 
+    byte type_x;
+    memcpy(&argc, line+1, sizeof(int));
+    uint offset;
+    /* args format */
+    type_x = line[1+sizeof(int)];
+    VM_StackTop(vm, type_x, &offset);
+    MewUserAssert(vm.heap+offset < vm.end, "out of memory");
+    char* args_format = (char*)(vm.heap+offset);
+    /* dll path */
+    type_x = line[2+sizeof(int)];
+    VM_StackTop(vm, type_x, &offset);
+    MewUserAssert(vm.heap+offset < vm.end, "out of memory");
+    char* dll_path = (char*)(vm.heap+offset);
+    /* function name */
+    type_x = line[3+sizeof(int)];
+    VM_StackTop(vm, type_x, &offset);
+    MewUserAssert(vm.heap+offset < vm.end, "out of memory");
+    char* func_name = (char*)(vm.heap+offset);
+    dll::DLL _dll(dll_path, func_name);
+    for(int i = 0; i < argc; i++) {
+      byte type_m;
+      switch(args_format[i]) {
+        case 'i':
+          int n;
+          VM_StackTop(vm, , (uint*)&n);
+          asm ( "push %0" : : "r"(n) );
+          break;
+        case 'f': 
+          float n = va_arg(factor, float);
+          asm ( "push %0" : : "r"(n) );
+          break;
+        case 'd':
+          double n = va_arg(factor, double);
+          asm ( "push %0" : : "r"(n) );
+          break;
+        case 'c':
+          char n = va_arg(factor, char);
+          asm ( "push %0" : : "r"(n) );
+          break;
+        case 's':
+          short n = va_arg(factor, short);
+          asm ( "push %0" : : "r"(n) );
+          break;
+        default: MewUserAssert(false, "unknown type");
+      }
+    }
+    int result = (int(*)(void))_dll.fproc();
+  }
+#endif
 
-  void VM_MathBase(VirtualMachine& vm, byte* line, uint* x, uint* y, byte** mem = nullptr) {
-    byte type_x = line[1];
-    byte type_y = line[2];
+  void VM_MathBase(VirtualMachine& vm, uint* x, uint* y, byte** mem = nullptr) {
+    byte type_x = *vm.begin++;
+    byte type_y = *vm.begin++;
     VM_StackTop(vm, type_x, x, mem);
     VM_StackTop(vm, type_y, y);
   }
-  void VM_Add(VirtualMachine& vm, byte* line) {
+  void VM_Add(VirtualMachine& vm) {
     int x, y;
     byte* mem;
-    VM_MathBase(vm, line, (uint*)&x, (uint*)&y, &mem);
+    byte type = *vm.begin;
+    VM_MathBase(vm, (uint*)&x, (uint*)&y, &mem);
     x += y;
     VM_ManualPush(vm, x);
-    if (line[1] == Instruction_MEM) {
+    if (type == Instruction_MEM) {
       memcpy(mem, &x, sizeof(x));
     }
   }
-  void VM_Sub(VirtualMachine& vm, byte* line) {
+  void VM_Sub(VirtualMachine& vm) {
     int x, y;
     byte* mem;
-    VM_MathBase(vm, line, (uint*)&x, (uint*)&y, &mem);
+    byte type = *vm.begin;
+    VM_MathBase(vm, (uint*)&x, (uint*)&y, &mem);
     x -= y;
     VM_ManualPush(vm, x);
-    if (line[1] == Instruction_MEM) {
+    if (type == Instruction_MEM) {
       memcpy(mem, &x, sizeof(x));
     }
   }
-  void VM_Mul(VirtualMachine& vm, byte* line) {
+  void VM_Mul(VirtualMachine& vm) {
     int x, y;
     byte* mem;
-    VM_MathBase(vm, line, (uint*)&x, (uint*)&y, &mem);
+    byte type = *vm.begin;
+    VM_MathBase(vm, (uint*)&x, (uint*)&y, &mem);
     x *= y;
     VM_ManualPush(vm, x);
-    if (line[1] == Instruction_MEM) {
+    if (type == Instruction_MEM) {
       memcpy(mem, &x, sizeof(x));
     }
   }
-  void VM_Div(VirtualMachine& vm, byte* line) {
+  void VM_Div(VirtualMachine& vm) {
     int x, y;
     byte* mem;
-    VM_MathBase(vm, line, (uint*)&x, (uint*)&y, &mem);
+    byte type = *vm.begin;
+    VM_MathBase(vm, (uint*)&x, (uint*)&y, &mem);
     x /= y;
     VM_ManualPush(vm, x);
-    if (line[1] == Instruction_MEM) {
+    if (type == Instruction_MEM) {
       memcpy(mem, &x, sizeof(x));
     }
   }
-  void VM_Inc(VirtualMachine& vm, byte* line) {
+  void VM_Inc(VirtualMachine& vm) {
     uint x;
     byte* mem;
-    VM_StackTop(vm, line[1], &x, &mem);
+    byte type = *vm.begin++;
+    VM_StackTop(vm, type, &x, &mem);
     x++;
     VM_ManualPush(vm, x);
-    if (line[1] == Instruction_MEM) {
+    if (type == Instruction_MEM) {
       memcpy(mem, &x, sizeof(x));
     }
   }
-  void VM_Dec(VirtualMachine& vm, byte* line) {
+  void VM_Dec(VirtualMachine& vm) {
     uint x;
     byte* mem;
-    VM_StackTop(vm, line[1], &x, &mem);
+    byte type = *vm.begin++;
+    VM_StackTop(vm, type, &x, &mem);
     x--;
     VM_ManualPush(vm, x);
-    if (line[1] == Instruction_MEM) {
+    if (type == Instruction_MEM) {
       memcpy(mem, &x, sizeof(x));
     }
   }
-  void VM_Xor(VirtualMachine& vm, byte* line) {
-    uint x, y;
+  void VM_Xor(VirtualMachine& vm) {
+    int x, y;
     byte* mem;
-    VM_MathBase(vm, line, (uint*)&x, (uint*)&y, &mem);
+    byte type = *vm.begin;
+    VM_MathBase(vm, (uint*)&x, (uint*)&y, &mem);
     x ^= y;
     VM_ManualPush(vm, x);
-    if (line[1] == Instruction_MEM) {
+    if (type == Instruction_MEM) {
       memcpy(mem, &x, sizeof(x));
     }
   }
-  void VM_Or(VirtualMachine& vm, byte* line) {
-    uint x, y;
+  void VM_Or(VirtualMachine& vm) {
+    int x, y;
     byte* mem;
-    VM_MathBase(vm, line, (uint*)&x, (uint*)&y, &mem);
+    byte type = *vm.begin;
+    VM_MathBase(vm, (uint*)&x, (uint*)&y, &mem);
     x |= y;
     VM_ManualPush(vm, x);
-    if (line[1] == Instruction_MEM) {
+    if (type == Instruction_MEM) {
       memcpy(mem, &x, sizeof(x));
     }
   }
-  void VM_Not(VirtualMachine& vm, byte* line) {
+  void VM_Not(VirtualMachine& vm) {
     uint x;
     byte* mem;
-    VM_StackTop(vm, line[1], &x, &mem);
+    byte type = *vm.begin++;
+    VM_StackTop(vm, type, &x, &mem);
     x = ~x;
     VM_ManualPush(vm, x);
-    if (line[1] == Instruction_MEM) {
+    if (type == Instruction_MEM) {
       memcpy(mem, &x, sizeof(x));
     }
   }
-  void VM_And(VirtualMachine& vm, byte* line) {
-    uint x, y;
+  void VM_And(VirtualMachine& vm) {
+    int x, y;
     byte* mem;
-    VM_MathBase(vm, line, (uint*)&x, (uint*)&y, &mem);
+    byte type = *vm.begin;
+    VM_MathBase(vm, (uint*)&x, (uint*)&y, &mem);
     x &= y;
     VM_ManualPush(vm, x);
-    if (line[1] == Instruction_MEM) {
+    if (type == Instruction_MEM) {
       memcpy(mem, &x, sizeof(x));
     }
   }
-  void VM_LS(VirtualMachine& vm, byte* line) {
-    uint x, y;
+  void VM_LS(VirtualMachine& vm) {
+    int x, y;
     byte* mem;
-    VM_MathBase(vm, line, (uint*)&x, (uint*)&y, &mem);
+    byte type = *vm.begin;
+    VM_MathBase(vm, (uint*)&x, (uint*)&y, &mem);
     x <<= y;
     VM_ManualPush(vm, x);
-    if (line[1] == Instruction_MEM) {
+    if (type == Instruction_MEM) {
       memcpy(mem, &x, sizeof(x));
     }
   }
-  void VM_RS(VirtualMachine& vm, byte* line) {
-    uint x, y;
+  void VM_RS(VirtualMachine& vm) {
+    int x, y;
     byte* mem;
-    VM_MathBase(vm, line, (uint*)&x, (uint*)&y, &mem);
+    byte type = *vm.begin;
+    VM_MathBase(vm, (uint*)&x, (uint*)&y, &mem);
     x >>= y;
     VM_ManualPush(vm, x);
-    if (line[1] == Instruction_MEM) {
+    if (type == Instruction_MEM) {
       memcpy(mem, &x, sizeof(x));
     }
   }
@@ -548,21 +615,20 @@ namespace Virtual {
   void VM_ManualJmp(VirtualMachine& vm, int offset) {
     MewUserAssert(MEW_IN_RANGE(vm.memory, vm.end, vm.begin+offset), 
       "out of memory");
-    vm.begin_stack.push(vm.begin+VM_CODE_ALIGN);
+    vm.begin_stack.push(vm.begin);
     vm.begin += offset;
   }
   
-  void VM_Jmp(VirtualMachine& vm, byte* line) {
+  void VM_Jmp(VirtualMachine& vm) {
     int offset;
-    memcpy(&offset, line+1, sizeof(int));
+    memcpy(&offset, vm.begin, sizeof(int)); vm.begin += sizeof(int);
     MewUserAssert(MEW_IN_RANGE(vm.memory, vm.end, vm.begin+offset), 
       "out of memory");
     vm.begin_stack.push(vm.begin);
     vm.begin += offset;
   }
 
-
-  void VM_Ret(VirtualMachine& vm, byte* line) {
+  void VM_Ret(VirtualMachine& vm) {
     if (vm.begin_stack.empty()) {
       vm.status = VM_Status_Ret; return;
     }
@@ -571,9 +637,9 @@ namespace Virtual {
     vm.begin_stack.pop();
   }
 
-  void VM_Test(VirtualMachine& vm, byte* line) {
+  void VM_Test(VirtualMachine& vm) {
     int x, y;
-    VM_MathBase(vm, line, (uint*)&x, (uint*)&y);
+    VM_MathBase(vm, (uint*)&x, (uint*)&y);
     int result = memcmp(&x, &y, sizeof(x));
     if (result > 0) {
       vm.test = VM_TestStatus_More;
@@ -584,88 +650,94 @@ namespace Virtual {
     }
   }
 
-  void VM_JE(VirtualMachine& vm, byte* line) {
+  void VM_JE(VirtualMachine& vm) {
     int offset; 
-    memcpy(&offset, line+1, sizeof(int));
+    memcpy(&offset, vm.begin, sizeof(int));
+    vm.begin += sizeof(int);
     if (vm.test == VM_TestStatus_Equal) {
       VM_ManualJmp(vm, offset);
     }
   }
-  void VM_JEL(VirtualMachine& vm, byte* line) {
+  void VM_JEL(VirtualMachine& vm) {
     int offset; 
-    memcpy(&offset, line+1, sizeof(int));
+    memcpy(&offset, vm.begin, sizeof(int));
+    vm.begin += sizeof(int);
     if (MEW_FIND_MASK(VM_TestStatus_EqualLess, vm.test)) {
       VM_ManualJmp(vm, offset);
     }
   }
-  void VM_JEM(VirtualMachine& vm, byte* line) {
+  void VM_JEM(VirtualMachine& vm) {
     int offset; 
-    memcpy(&offset, line+1, sizeof(int));
+    memcpy(&offset, vm.begin, sizeof(int));
+    vm.begin += sizeof(int);
     if (MEW_FIND_MASK(VM_TestStatus_EqualMore, vm.test)) {
       VM_ManualJmp(vm, offset);
     }
   }
-  void VM_JL(VirtualMachine& vm, byte* line) {
+  void VM_JL(VirtualMachine& vm) {
     int offset; 
-    memcpy(&offset, line+1, sizeof(int));
+    memcpy(&offset, vm.begin, sizeof(int));
+    vm.begin += sizeof(int);
     if (vm.test == VM_TestStatus_Less) {
       VM_ManualJmp(vm, offset);
     }
   }
-  void VM_JM(VirtualMachine& vm, byte* line) {
+  void VM_JM(VirtualMachine& vm) {
     int offset; 
-    memcpy(&offset, line+1, sizeof(int));
+    memcpy(&offset, vm.begin, sizeof(int));
+    vm.begin += sizeof(int);
     if (vm.test == VM_TestStatus_More) {
       VM_ManualJmp(vm, offset);
     }
   }
-  void VM_JNE(VirtualMachine& vm, byte* line) {
+  void VM_JNE(VirtualMachine& vm) {
     int offset; 
-    memcpy(&offset, line+1, sizeof(int));
+    memcpy(&offset, vm.begin, sizeof(int));
+    vm.begin += sizeof(int);
     if (vm.test != VM_TestStatus_Equal) {
       VM_ManualJmp(vm, offset);
     }
   }
 
-  void VM_Mov(VirtualMachine& vm, byte* line) {
+  void VM_Mov(VirtualMachine& vm) {
     uint x; 
-    VM_StackTop(vm, line[1], &x);
+    VM_StackTop(vm, *vm.begin++, &x);
     uint offset;
-    memcpy(&offset, line+2, sizeof(uint));
+    memcpy(&offset, vm.begin++, sizeof(uint));
     MewUserAssert(vm.heap+offset < vm.end, "out of memory");
     byte* pointer = vm.heap+offset;
     memcpy(pointer, &x, sizeof(x));
   }
   
-  void VM_MSet(VirtualMachine& vm, byte* line) {
+  void VM_MSet(VirtualMachine& vm) {
     uint x; /* start */
     uint y; /* size  */
     uint z; /* value */
-    VM_StackTop(vm, Instruction_NUM, &x);
-    VM_StackTop(vm, Instruction_NUM, &y);
-    VM_StackTop(vm, Instruction_NUM, &z);
+    memcpy(&x, vm.begin, sizeof(x)); vm.begin += sizeof(x);
+    memcpy(&y, vm.begin, sizeof(y)); vm.begin += sizeof(y);
+    memcpy(&z, vm.begin, sizeof(z)); vm.begin += sizeof(z);
     MewUserAssert(vm.heap+x < vm.end, "out of memory");
     MewUserAssert(vm.heap+x+y < vm.end, "out of memory");
     memset(vm.heap+x, z, y);
   }
 
-  void VM_Putc(VirtualMachine& vm, byte* line) {
+  void VM_Putc(VirtualMachine& vm) {
     wchar_t long_char;
-    memcpy(&long_char, line+1, sizeof(wchar_t));
+    memcpy(&long_char, vm.begin, sizeof(wchar_t)); vm.begin+=sizeof(wchar_t);
     putwchar(long_char);
   }
   
-  void VM_Puti(VirtualMachine& vm, byte* line) {
+  void VM_Puti(VirtualMachine& vm) {
     int x;
-    VM_StackTop(vm, line[1], (uint*)&x);
+    VM_StackTop(vm, *vm.begin++, (uint*)&x);
     char str[12] = {0};
     itoa(x, str, 10);
     fputs(str, stdout);
   }
 
-  void VM_Puts(VirtualMachine& vm, byte* line) {
+  void VM_Puts(VirtualMachine& vm) {
     uint offset;
-    memcpy(&offset, line+1, sizeof(uint));
+    memcpy(&offset, vm.begin, sizeof(uint)); vm.begin+=sizeof(uint);
     MewUserAssert(vm.heap+offset < vm.end, "out of memory");
     byte* pointer = vm.heap+offset;
     wchar_t* begin = (wchar_t*)pointer;
@@ -674,148 +746,151 @@ namespace Virtual {
     }
   }
 
-  void VM_Open(VirtualMachine& vm, byte* line) {
+  void VM_Open(VirtualMachine& vm) {
     uint offset;
-    memcpy(&offset, line+1, sizeof(uint));
+    memcpy(&offset, vm.begin, sizeof(uint)); vm.begin+=sizeof(uint);
     MewUserAssert(vm.heap+offset < vm.end, "out of memory");
     byte* pointer = vm.heap+offset;
     char* begin = (char*)pointer;
     int flags;
-    VM_StackTop(vm, line[4], (uint*)&flags);
+    memcpy(&flags, vm.begin, sizeof(int)); vm.begin+=sizeof(int);
     int dest = open(begin, flags);
     VM_ManualPush(vm, dest);
   }
 
-  void VM_Swst(VirtualMachine& vm, byte* line) {
+  void VM_Swst(VirtualMachine& vm) {
     int idx;
     bool use_stack;
-    memcpy(&use_stack, line+1, sizeof(use_stack));
+    memcpy(&use_stack, vm.begin++, sizeof(use_stack));
     if (use_stack) {
-      VM_StackTop(vm, line[2], (uint*)&idx);
+      VM_StackTop(vm, *vm.begin++, (uint*)&idx);
     } else {
-      memcpy(&idx, line+2, sizeof(idx));
+      memcpy(&idx, vm.begin, sizeof(idx)); vm.begin+=sizeof(idx);
     }
     vm.r_stream = fdopen(idx, "r+");
   }
   
-  void VM_Write(VirtualMachine& vm, byte* line) {
+  void VM_Write(VirtualMachine& vm) {
     uint offset;
-    memcpy(&offset, line+1, sizeof(uint));
+    memcpy(&offset, vm.begin, sizeof(uint)); vm.begin+=sizeof(uint);
     MewUserAssert(vm.heap+offset < vm.end, "out of memory");
     byte* pointer = vm.heap+offset;
     fputws((wchar_t*)pointer, vm.r_stream);
   }
   
-  void VM_Read(VirtualMachine& vm, byte* line) {
+  void VM_Read(VirtualMachine& vm) {
     uint offset;
-    memcpy(&offset, line+1, sizeof(uint));
+    memcpy(&offset, vm.begin, sizeof(uint)); vm.begin+=sizeof(uint);
     MewUserAssert(vm.heap+offset < vm.end, "out of memory");
     byte* pointer = vm.heap+offset;
     short int chunk_size;
-    memcpy(&chunk_size, line+1+sizeof(uint), sizeof(chunk_size));
+    memcpy(&chunk_size, vm.begin, sizeof(chunk_size)); vm.begin+=sizeof(chunk_size);
     MewUserAssert(vm.heap+offset+(chunk_size*2) < vm.end, "out of memory (chunk too big)");
     fgetws((wchar_t*)pointer, chunk_size, vm.r_stream);
   }
 
-  void RunLine(VirtualMachine& vm, byte* line) {
-    byte head_byte = line[0];
+  void RunLine(VirtualMachine& vm) {
+    byte head_byte = *vm.begin++;
+    if (MEW_FIND_MASK(vm.flags,VM_flags::HeapLockExecute)) { 
+      MewAssert(vm.begin < vm.heap);
+    }
     switch (head_byte) {
       case Instruction_NONE: break;
       case Instruction_PUSH: {
-        VM_Push(vm, line);
+        VM_Push(vm);
       } break;
       case Instruction_POP: {
-        VM_Pop(vm, line);
+        VM_Pop(vm);
       } break;
       case Instruction_ADD: {
-        VM_Add(vm, line);
+        VM_Add(vm);
       } break;
       case Instruction_SUB: {
-        VM_Sub(vm, line);
+        VM_Sub(vm);
       } break;
       case Instruction_MUL: {
-        VM_Mul(vm, line);
+        VM_Mul(vm);
       } break;
       case Instruction_DIV: {
-        VM_Div(vm, line);
+        VM_Div(vm);
       } break;
       case Instruction_INC: {
-        VM_Inc(vm, line);
+        VM_Inc(vm);
       } break;
       case Instruction_DEC: {
-        VM_Dec(vm, line);
+        VM_Dec(vm);
       } break;
       case Instruction_XOR: {
-        VM_Xor(vm, line);
+        VM_Xor(vm);
       } break;
       case Instruction_OR: {
-        VM_Or(vm, line);
+        VM_Or(vm);
       } break;
       case Instruction_NOT: {
-        VM_Not(vm, line);
+        VM_Not(vm);
       } break;
       case Instruction_LS: {
-        VM_LS(vm, line);
+        VM_LS(vm);
       } break;
       case Instruction_RS: {
-        VM_RS(vm, line);
+        VM_RS(vm);
       } break;
       case Instruction_JMP: {
-        VM_Jmp(vm, line);
+        VM_Jmp(vm);
       } break;
       case Instruction_RET: {
-        VM_Ret(vm, line);
+        VM_Ret(vm);
       } break;
       case Instruction_TEST: {
-        VM_Test(vm, line);
+        VM_Test(vm);
       } break;
       case Instruction_JE: {
-        VM_JE(vm, line);
+        VM_JE(vm);
       } break;
       case Instruction_JEL: {
-        VM_JEL(vm, line);
+        VM_JEL(vm);
       } break;
       case Instruction_JEM: {
-        VM_JEM(vm, line);
+        VM_JEM(vm);
       } break;
       case Instruction_JL: {
-        VM_JL(vm, line);
+        VM_JL(vm);
       } break;
       case Instruction_JM: {
-        VM_JM(vm, line);
+        VM_JM(vm);
       } break;
       case Instruction_JNE: {
-        VM_JNE(vm, line);
+        VM_JNE(vm);
       } break;
       case Instruction_MOV: {
-        VM_Mov(vm, line);
+        VM_Mov(vm);
       } break;
       case Instruction_MSET: {
-        VM_MSet(vm, line);
+        VM_MSet(vm);
       } break;
       case Instruction_PUTC: {
-        VM_Putc(vm, line);
+        VM_Putc(vm);
       } break;
       case Instruction_PUTI: {
-        VM_Puti(vm, line);
+        VM_Puti(vm);
       } break;
       case Instruction_PUTS: {
-        VM_Puts(vm, line);
+        VM_Puts(vm);
       } break;
       case Instruction_CALL: {
-        VM_Call(vm, line);
+        VM_Call(vm);
       } break;
       case Instruction_SWST: {
-        VM_Swst(vm, line);
+        VM_Swst(vm);
       } break;
       case Instruction_WRITE: {
-        VM_Write(vm, line);
+        VM_Write(vm);
       } break;
       case Instruction_READ: {
-        VM_Read(vm, line);
+        VM_Read(vm);
       } break;
       case Instruction_OPEN: {
-        VM_Open(vm, line);
+        VM_Open(vm);
       } break;
       case Instruction_EXIT: {
         vm.status = VM_Status_Ret;
@@ -838,8 +913,7 @@ namespace Virtual {
       memcpy(vm.heap, code.data, code.data_size*sizeof(*code.data));
     }
     while (vm.begin < vm.end && vm.status != VM_Status_Ret) {
-      RunLine(vm, vm.begin);
-      vm.begin += VM_CODE_ALIGN;
+      RunLine(vm);
     }
     vm.status = VM_Status_Panding;
   }
@@ -888,15 +962,15 @@ namespace Virtual {
     };
     static const size_t alloc_size = 8;
   private:
-    size_t capacity, size, code_cursor = 0;
-    byte* code;
+    size_t capacity, size;
+    byte* code = nullptr, *code_cursor;
     size_t _data_size = 0;
     byte* data = nullptr;
     byte cursor = 0;
     byte line[alloc_size];
   public:
     CodeBuilder(): capacity(alloc_size), size(0), 
-      code(new byte[alloc_size]), _data_size(0) { memset(line, 0, alloc_size); memset(code, 0, alloc_size); }
+      code((byte*)realloc(NULL, alloc_size)), _data_size(0) { memset(line, 0, alloc_size); memset(code, 0, alloc_size); }
 
     size_t code_size() const noexcept {
       return size;
@@ -911,39 +985,15 @@ namespace Virtual {
     }
 
     void Upsize(size_t _size = alloc_size) {
-      byte* __new_code = new byte[capacity+_size];
-      memset(__new_code, 0, capacity);
-      memcpy(__new_code, code, capacity);
+      byte* __temp_p = (byte*)realloc(code, capacity+_size);
+      code = __temp_p;
       capacity += _size;
-      byte* __old_code = code;
-      code = __new_code;
-      free(__old_code);
     }
 
-    void Enter() {
-      /* skip */
-      if (cursor == 0) { return; }
-      Upsize();
-      memcpy(code+size, line, alloc_size);
-      memset(line, 0, alloc_size);
-      size += alloc_size;
-      cursor = 0;
-      code_cursor++;
-    }
-
-    size_t Rows() {
-      return size/alloc_size;
-    }
-
-    void ShiftCursor(int offset) {
-      code_cursor += offset;
-      code_cursor = code_cursor % (size+1);
-      code_cursor = code_cursor < 0? 0: code_cursor;
-      code += code_cursor*alloc_size;
-    }
-    void ResetCursor(int offset) {
-      code -= size - (code_cursor*alloc_size);
-      code_cursor = size/alloc_size;
+    void UpsizeIfNeeds(size_t needs_size) {
+      if (size+needs_size > capacity) {
+        Upsize(needs_size);
+      }
     }
     
     friend CodeBuilder& operator+(CodeBuilder& cb, const CodeBuilder& i) {
@@ -1009,7 +1059,6 @@ namespace Virtual {
     }
     
     friend CodeBuilder& operator<<(CodeBuilder& cb, CodeBuilder& i) {
-      cb.Enter();
       cb.Upsize(i.capacity);
       memcpy(cb.code+cb.size, i.code, i.capacity);
       cb.size += i.capacity;
@@ -1018,47 +1067,32 @@ namespace Virtual {
     } 
 
     friend CodeBuilder& operator<<(CodeBuilder& cb, byte i) {
-      if (cb.cursor+1 >= alloc_size) {
-        cb.Enter();
-      }
-      cb.line[cb.cursor++] = i;
+      cb.UpsizeIfNeeds(sizeof(i));
+      cb.code[cb.size++] = i;
       return cb;
     } 
     friend CodeBuilder& operator<<(CodeBuilder& cb, uint i) {
-      if (cb.cursor+sizeof(i) >= alloc_size) {
-        cb.Enter();
-      }
-      memcpy(cb.line+cb.cursor, &i, sizeof(i));
-      cb.cursor += sizeof(i); 
+      cb.UpsizeIfNeeds(sizeof(i));
+      memcpy(cb.code+cb.size, &i, sizeof(i));
+      cb.size += sizeof(i);
       return cb;
     }
     friend CodeBuilder& operator<<(CodeBuilder& cb, Instruction i) {
-      if (cb.cursor+1 >= alloc_size) {
-        cb.Enter();
-      }
-      cb.line[cb.cursor++] = i;
+      cb.UpsizeIfNeeds(sizeof(i));
+      cb.code[cb.size++] = i;
       return cb;
     }
     friend CodeBuilder& operator<<(CodeBuilder& cb, int i) {
-      if (cb.cursor+sizeof(i) >= alloc_size) {
-        cb.Enter();
-      }
-      memcpy(cb.line+cb.cursor, &i, sizeof(i));
-      cb.cursor += sizeof(i); 
+      cb.UpsizeIfNeeds(sizeof(i));
+      memcpy(cb.code+cb.size, &i, sizeof(i));
+      cb.size += sizeof(i);
       return cb;
     }
     friend CodeBuilder& operator<<(CodeBuilder& cb, untyped_pair i) {
-      if (cb.cursor+i.size >= alloc_size) {
-        cb.Enter();
-      }
-      memcpy(cb.line+cb.cursor, &i.data, i.size);
-      cb.cursor += i.size; 
+      cb.UpsizeIfNeeds(i.size);
+      memcpy(cb.code+cb.size, &i.data, i.size);
+      cb.size += i.size;
       return cb;
-    }
-
-    CodeBuilder operator++(int) {
-      Enter();
-      return *this;
     }
 
     Code* operator*() {
@@ -1104,9 +1138,7 @@ namespace Tests {
       CodeBuilder builder;
       builder << Instruction_PUTS;
       builder << 0U;
-      builder++;
-      builder << Instruction_RET;
-      builder++;
+      builder << Instruction_EXIT;
       builder += L"hellow word";
       Code* code = *builder;
       Code_SaveFromFile(*code, "./hellow_word.nb");

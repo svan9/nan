@@ -1,5 +1,6 @@
 #include <iostream>
-#include "nan.hpp"
+#include "virtual.hpp"
+#include "virtuallib.hpp"
 
 int main() {
 	printf("test -- virtual -- \n");

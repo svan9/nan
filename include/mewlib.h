@@ -26,6 +26,7 @@
 	#include <exception>
 #endif
 #include <stdlib.h>
+#include <stdio.h>
 
 #ifdef RELEASE
 	#define __mewassert(strexpr, message, file, line, func) NULLVAL
@@ -43,10 +44,9 @@
 
 #if defined(MEW_USE_THROWS) && __cplusplus
 	#define MewUserAssert(expr, message) \
-		if (!(expr)) {\
-			__mewassert(#expr, message, __FILE__, __LINE__, __func__); exit(1); }
+		if (!(expr)) { throw std::runtime_error(message); }
 	#define MewAssert(expr) \
-		if (!(expr)) {__mewassert_nm(#expr, __FILE__, __LINE__, __func__); exit(1); }
+		if (!(expr)) { throw std::runtime_error(#expr);}
 #else
 	#define MewUserAssert(expr, message) \
 		if (!(expr)) {__mewassert(#expr, message, __FILE__, __LINE__, __func__); exit(1); }
