@@ -1,6 +1,9 @@
 #ifndef MewLib_IMPL
 #define MewLib_IMPL
 
+#include <stdlib.h>
+#include <stdio.h>
+
 #ifndef MEW_NO_RELEASE
 	#define MEW_NO_RELEASE
 #endif
@@ -18,6 +21,10 @@
 	#define __CXX20
 #endif
 
+#ifdef MEW_USE_THROWS && defined(__cplusplus)
+#undef MEW_USE_THROWS
+#endif 
+
 #ifndef NULLVAL
 #define NULLVAL ((void)0)
 #endif
@@ -25,8 +32,6 @@
 #ifdef __cplusplus
 	#include <exception>
 #endif
-#include <stdlib.h>
-#include <stdio.h>
 
 #ifdef RELEASE
 	#define __mewassert(strexpr, message, file, line, func) NULLVAL
@@ -92,6 +97,8 @@
 	#define MewPrintError(_error) printf("\nErrored from %s:%i at function `%s(...)`\n\twhat: %s", __FILE__, __LINE__, __func__, (_error).what());
 
 	#include <string.h>
+	#include <string>
+	#include <wchar.h>
 	#include <concepts>
 
 char *ansi(wchar_t *unicode) {
