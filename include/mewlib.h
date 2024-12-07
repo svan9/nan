@@ -1,3 +1,9 @@
+/**************************************************
+ * - Author: so2u
+ * - Create Time: 2024-11-28 17:48:15
+ * - Git: https://github.com/svan9
+ **************************************************/
+
 #ifndef MewLib_IMPL
 #define MewLib_IMPL
 
@@ -21,7 +27,7 @@
 	#define __CXX20
 #endif
 
-#ifdef MEW_USE_THROWS && defined(__cplusplus)
+#if defined(__cplusplus) && defined(MEW_USE_THROWS) 
 #undef MEW_USE_THROWS
 #endif 
 

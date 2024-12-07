@@ -22,7 +22,7 @@ private:
 public:
   ////////////////////////////////////////////////////////////
   stack(): _M_capacity(sizeof(T)), _M_size(0) {
-    data = realloc(nullptr, _M_capacity);
+    data = (T*)realloc(data, _M_capacity);
   }
 
   ////////////////////////////////////////////////////////////
@@ -120,7 +120,6 @@ public:
     T* end = (T*)(data+start+size);
     memmove(begin, end, size*sizeof(T));
     _M_size -= size;
-    ____MEWMEW____
   }
   
   ////////////////////////////////////////////////////////////

@@ -117,31 +117,6 @@ namespace Virtual {
 
 #pragma region FILE
  
-  void Code_SaveFromFileEx(const CodeExtended& code, const std::filesystem::path& path) {
-    std::ofstream file(path, std::ios::out | std::ios::binary);
-    MewAssert(file.is_open());
-    file.seekp(std::ios::beg);
-    /* version */
-    uint vv = (uint)VIRTUAL_VERSION;
-    file.write((const char*)(&vv), sizeof(uint));
-    /* manifest */
-    file << code.manifest->procs.size();
-    for (auto proc: code.manifest->procs) {
-      file << ((byte*)((uint)((void*)proc)));
-    }
-    /* code */
-    file << code.code->capacity;
-    for (int i = 0; i < code.code->capacity; i++) {
-      file << ((byte*)code.code->playground)[i];
-    }
-    /* data */
-    file << code.code->data_size;
-    for (int i = 0; i < code.code->data_size; i++) {
-      file << ((byte*)code.code->data)[i];
-    }
-    file.close();
-  }
-
   void Code_SaveFromFile(const Code& code, const std::filesystem::path& path) {
     std::ofstream file(path, std::ios::out | std::ios::binary);
     MewAssert(file.is_open());
@@ -167,57 +142,6 @@ namespace Virtual {
     Code_SaveFromFile(code, __path);
   }
 
-  void Code_SaveFromFileEx(const CodeExtended& code, const char* path) {
-    std::filesystem::path __path(path);
-    if (!__path.is_absolute()) {
-      __path = std::filesystem::absolute(__path.lexically_normal());
-    }
-    Code_SaveFromFileEx(code, __path);
-  }
-
-  void Code_SaveFromFileEx(Code& code, const char* path) {
-    CodeExtended ce;
-    ce.code = &code;
-    Code_SaveFromFileEx(ce, path);
-  }
-
-  CodeExtended* Code_LoadFromFileEx(const std::filesystem::path& path) {
-    std::ifstream file(path, std::ios::in | std::ios::binary);
-    MewAssert(file.is_open());
-    file.seekg(std::ios::beg);
-    file >> std::noskipws;
-    uint file_version;
-    char vv[sizeof(uint)];
-    file.read(vv, sizeof(uint));
-    memcpy(&file_version, vv, sizeof(uint));
-    if (file_version != VIRTUAL_VERSION) {
-      MewWarn("file version not support (%i != %i)", file_version, VIRTUAL_VERSION); 
-      return nullptr;
-    }
-    CodeExtended* code = new CodeExtended();
-    /* manifest */
-    uint size;
-    file >> size;
-    for (int i = 0; i < size; i++) {
-      uint raw_r;
-      file >> raw_r;
-      code->manifest->procs.push_back((VM_Processor)((void*)(raw_r)));
-    }
-    /* code */
-    file >> code->code->capacity;
-    code->code->playground = new Instruction[code->code->capacity];
-    for (int i = 0; i < code->code->capacity; i++) {
-      file >> ((byte*)code->code->playground)[i];
-    }
-    /* data */
-    file >> code->code->data_size;
-    code->code->data = new byte[code->code->data_size];
-    for (int i = 0; i < code->code->data_size; i++) {
-      file >> ((byte*)code->code->data)[i];
-    }
-    file.close();
-    return code;
-  }
 
   Code* Code_LoadFromFile(const std::filesystem::path& path) {
     std::ifstream file(path, std::ios::in | std::ios::binary);
@@ -254,23 +178,6 @@ namespace Virtual {
       __path = std::filesystem::absolute(__path.lexically_normal());
     }
     return Code_LoadFromFile(__path);
-  }
-  
-  CodeExtended* Code_LoadFromFileEx(const char* path) {
-    std::filesystem::path __path(path);
-    if (!__path.is_absolute()) {
-      __path = std::filesystem::absolute(__path.lexically_normal());
-    }
-    return Code_LoadFromFileEx(__path);
-  }
-
-  Code* Code_LoadFromFileExR(const char* path) {
-    std::filesystem::path __path(path);
-    if (!__path.is_absolute()) {
-      __path = std::filesystem::absolute(__path.lexically_normal());
-    }
-    CodeExtended* ce = Code_LoadFromFileEx(__path);
-    return ce->code;
   }
 
   enum VM_Status: byte {
@@ -934,23 +841,6 @@ namespace Virtual {
   void Execute(const char* path) {
     Code* code = Code_LoadFromFile(path);
     Execute(*code);
-  }
-
-  void ExecuteEx(VirtualMachine& vm, CodeExtended& code) {
-    Alloc(vm, *code.code);
-    LoadMemory(vm, *code.code);
-    Run(vm, *code.code);
-    vm.procs = code.manifest->procs;
-  }
-  
-  void ExecuteEx(CodeExtended& code) {
-    VirtualMachine vm;
-    ExecuteEx(vm, code);
-  }
-
-  void ExecuteEx(const char* path) {
-    CodeExtended* code = Code_LoadFromFileEx(path);
-    ExecuteEx(*code);
   }
 
   // template<size_t alloc_size = 8>
