@@ -7,9 +7,11 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <windows.h>
 #include <fcntl.h>
 #include <vector>
+#ifndef _WIN32
+#include <windows.h>
+#endif
 // #include "dlllib.hpp"
 
 /*
@@ -326,59 +328,6 @@ namespace Virtual {
   void VM_Call(VirtualMachine& vm) {
     MewNotImpl();
   }
-// todo 
-#if 0
-  void VM_Call(VirtualMachine& vm) {
-    int argc; 
-    byte type_x;
-    memcpy(&argc, line+1, sizeof(int));
-    uint offset;
-    /* args format */
-    type_x = line[1+sizeof(int)];
-    VM_StackTop(vm, type_x, &offset);
-    MewUserAssert(vm.heap+offset < vm.end, "out of memory");
-    char* args_format = (char*)(vm.heap+offset);
-    /* dll path */
-    type_x = line[2+sizeof(int)];
-    VM_StackTop(vm, type_x, &offset);
-    MewUserAssert(vm.heap+offset < vm.end, "out of memory");
-    char* dll_path = (char*)(vm.heap+offset);
-    /* function name */
-    type_x = line[3+sizeof(int)];
-    VM_StackTop(vm, type_x, &offset);
-    MewUserAssert(vm.heap+offset < vm.end, "out of memory");
-    char* func_name = (char*)(vm.heap+offset);
-    dll::DLL _dll(dll_path, func_name);
-    for(int i = 0; i < argc; i++) {
-      byte type_m;
-      switch(args_format[i]) {
-        case 'i':
-          int n;
-          VM_StackTop(vm, , (uint*)&n);
-          asm ( "push %0" : : "r"(n) );
-          break;
-        case 'f': 
-          float n = va_arg(factor, float);
-          asm ( "push %0" : : "r"(n) );
-          break;
-        case 'd':
-          double n = va_arg(factor, double);
-          asm ( "push %0" : : "r"(n) );
-          break;
-        case 'c':
-          char n = va_arg(factor, char);
-          asm ( "push %0" : : "r"(n) );
-          break;
-        case 's':
-          short n = va_arg(factor, short);
-          asm ( "push %0" : : "r"(n) );
-          break;
-        default: MewUserAssert(false, "unknown type");
-      }
-    }
-    int result = (int(*)(void))_dll.fproc();
-  }
-#endif
 
   void VM_MathBase(VirtualMachine& vm, uint* x, uint* y, byte** mem = nullptr) {
     byte type_x = *vm.begin++;
