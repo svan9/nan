@@ -4,12 +4,13 @@
 #include "config.h"
 #include "mewlib.h"
 #include <stack>
+#include <stdlib.h>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <fcntl.h>
 #include <vector>
-#ifndef _WIN32
+#ifdef _WIN32
 #include <windows.h>
 #endif
 // #include "dlllib.hpp"
@@ -587,7 +588,7 @@ namespace Virtual {
     int x;
     VM_StackTop(vm, *vm.begin++, (uint*)&x);
     char str[12] = {0};
-    itoa(x, str, 10);
+    _itoa(x, str, 10);
     fputs(str, stdout);
   }
 
