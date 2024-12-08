@@ -14,6 +14,9 @@
 #include <windows.h>
 #endif
 // #include "dlllib.hpp"
+void _itoa10(int _Value, char *_Dest) {
+  snprintf(_Dest, sizeof(_Dest), "%d", _Value);
+}
 
 /*
 Reference
@@ -588,7 +591,7 @@ namespace Virtual {
     int x;
     VM_StackTop(vm, *vm.begin++, (uint*)&x);
     char str[12] = {0};
-    _itoa(x, str, 10);
+    _itoa10(x, str);
     fputs(str, stdout);
   }
 
