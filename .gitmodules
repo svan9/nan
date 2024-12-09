@@ -1,0 +1,3 @@
+[submodule "mewlib"]
+path = mewlib
+url = https://github.com/svan9/mewlib
