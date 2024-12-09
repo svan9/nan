@@ -253,8 +253,8 @@ namespace Virtual::Asm {
 						}
 					break;
 				}
-				return builder.Build();
 			}
+			return builder.Build();
 		}
 }
 
