@@ -15,6 +15,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Submodules
+        run:  git submodule update --init --recursive
+        
       - name: Configure CMake
         run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
@@ -29,6 +32,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Submodules
+        run:  git submodule update --init --recursive
 
       - name: Configure CMake
         run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
