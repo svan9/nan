@@ -4,12 +4,13 @@
 #include <vector>
 #include "config.h"
 #include "grammar.hpp"
+#include "mewall.h"
 #include <string>
 
 namespace Lexer {
   struct Lexer {
     const char* source;
-    StringIterator sit;
+    mew::string::StringIterator sit;
     std::vector<Token::Token> tokens;
     typedef std::vector<Token::Token>::iterator Iterator;
   };
@@ -20,7 +21,7 @@ namespace Lexer {
 
   bool CheckKeyWords(Lexer& lexer) {
     size_t before_space =
-      CountRightBefore(lexer.sit.begin, " \n\r\v\b\t");
+      mew::string::CountRightBefore(lexer.sit.begin, " \n\r\v\b\t");
     if (cmp_string(lexer.sit.begin, "entry", before_space)) {
       lexer.tokens.push_back({Token::Token_Entry});
     } else 

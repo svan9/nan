@@ -1,8 +1,7 @@
 #ifndef _NAN_VIRTUAL_IMPL
 #define _NAN_VIRTUAL_IMPL
 
-#include "config.h"
-#include "mewlib.h"
+#include "mewall.h"
 #include <stack>
 #include <stdlib.h>
 #include <cstring>
@@ -13,11 +12,7 @@
 #ifdef _WIN32
 #include <windows.h>
 #endif
-// #include "dlllib.hpp"
-void _itoa10(int _Value, char *_Dest) {
-  snprintf(_Dest, sizeof(_Dest), "%d", _Value);
-}
-
+#include "mewmath.hpp"
 /*
 Reference
   push <type:1b> <value:4b>
@@ -591,7 +586,7 @@ namespace Virtual {
     int x;
     VM_StackTop(vm, *vm.begin++, (uint*)&x);
     char str[12] = {0};
-    _itoa10(x, str);
+    mew::_itoa10(x, str);
     fputs(str, stdout);
   }
 

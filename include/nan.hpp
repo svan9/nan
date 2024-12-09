@@ -1,7 +1,7 @@
 #ifndef NAN_IMPL
 #define NAN_IMPL
 
-#include "mewlib.h"
+#include "mewall.h"
 #include "lexer.hpp"
 #include "parser.hpp"
 #include "virtual.hpp"

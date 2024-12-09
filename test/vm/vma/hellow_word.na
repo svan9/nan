@@ -1,6 +1,4 @@
-data:
-	heap text "hellow, word\0"
-
+data "hellow, word\0"
 entry:
-	puts +0
+	puts 0
 	ret

@@ -2,7 +2,7 @@
 #define _NAN_PARSER_IMPL
 
 #include <vector>
-#include "mewlib.h"
+#include "mewall.h"
 #include "config.h"
 #include "astlib.hpp"
 #include "grammar.hpp"

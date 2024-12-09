@@ -1,144 +1,84 @@
 #ifndef _NAN_ASM_IMPL
 #define _NAN_ASM_IMPL
 
-#include "config.h"
-#include "mewlib.h"
+#include "mewall.h"
 #include "virtual.hpp"
-#include "grammar.hpp"
-#include <filesystem>
+#include "virtuallib.hpp"
+#include <iostream>
+#include <map>
 
-namespace Virtual {
-	namespace Lexer {
-		#define PUSH_SINGLE_TOKEN(cr, _token) case cr: lexer.tokens.push_back({_token}); break;
-		#define SKIP_SINGLE_TOKEN(cr) case cr: break;
-
-		struct Token {
-			Instruction kind;
-			const char* data;	
-		};
-
-		struct Lexer {
-			StringIterator sit;
-			std::vector<Token> tokens;
-			typedef std::vector<Token>::iterator Iterator;
-		};
+namespace Virtual::Asm {
+		static const char* spaces = " \n\r\v\b\t";
+		using StringIterator = mew::string::StringIterator;
 
 		#define cmp_string(f, a, b) (strlen(a) == b && memcmp(f, a, b))
+		#define SKIP_SINGLE_TOKEN(cr) case cr: break;
+		#define SKIP_WORD() sit += before_space; \
+				sit += mew::string::CountRightFor(sit.begin, spaces);
 
-		bool CheckKeyWords(Lexer& lexer) {
+		void JumpToLabel(StringIterator& sit, Virtual::Lib::Builder& builder) {
 			size_t before_space =
-				CountRightBefore(lexer.sit.begin, " \n\r\v\b\t");
-			if (cmp_string(lexer.sit.begin, "push", before_space)) {
-				lexer.tokens.push_back({Instruction_PUSH});
-			} else 
-			if (cmp_string(lexer.sit.begin, "pop", before_space)) {
-				lexer.tokens.push_back({Instruction_POP});
-			} else 
-			if (cmp_string(lexer.sit.begin, "add", before_space)) {
-				lexer.tokens.push_back({Instruction_ADD});
-			} else 
-			if (cmp_string(lexer.sit.begin, "sub", before_space)) {
-				lexer.tokens.push_back({Instruction_SUB});
-			} else 
-			if (cmp_string(lexer.sit.begin, "mul", before_space)) {
-				lexer.tokens.push_back({Instruction_MUL});
-			} else 
-			if (cmp_string(lexer.sit.begin, "div", before_space)) {
-				lexer.tokens.push_back({Instruction_DIV});
-			} else 
-			if (cmp_string(lexer.sit.begin, "xor", before_space)) {
-				lexer.tokens.push_back({Instruction_XOR});
-			} else 
-			if (cmp_string(lexer.sit.begin, "or", before_space)) {
-				lexer.tokens.push_back({Instruction_OR});
-			} else 
-			if (cmp_string(lexer.sit.begin, "not", before_space)) {
-				lexer.tokens.push_back({Instruction_NOT});
-			} else 
-			if (cmp_string(lexer.sit.begin, "and", before_space)) {
-				lexer.tokens.push_back({Instruction_AND});
-			} else 
-			if (cmp_string(lexer.sit.begin, "ls", before_space)) {
-				lexer.tokens.push_back({Instruction_LS});
-			} else 
-			if (cmp_string(lexer.sit.begin, "rs", before_space)) {
-				lexer.tokens.push_back({Instruction_RS});
-			} else 
-			if (cmp_string(lexer.sit.begin, "jmp", before_space)) {
-				lexer.tokens.push_back({Instruction_JMP});
-			} else 
-			if (cmp_string(lexer.sit.begin, "ret", before_space)) {
-				lexer.tokens.push_back({Instruction_RET});
-			} else 
-			if (cmp_string(lexer.sit.begin, "test", before_space)) {
-				lexer.tokens.push_back({Instruction_TEST});
-			} else 
-			if (cmp_string(lexer.sit.begin, "je", before_space)) {
-				lexer.tokens.push_back({Instruction_JE});
-			} else 
-			if (cmp_string(lexer.sit.begin, "jl", before_space)) {
-				lexer.tokens.push_back({Instruction_JL});
-			} else 
-			if (cmp_string(lexer.sit.begin, "jm", before_space)) {
-				lexer.tokens.push_back({Instruction_JM});
-			} else 
-			if (cmp_string(lexer.sit.begin, "jel", before_space)) {
-				lexer.tokens.push_back({Instruction_JEL});
-			} else 
-			if (cmp_string(lexer.sit.begin, "jem", before_space)) {
-				lexer.tokens.push_back({Instruction_JEM});
-			} else 
-			if (cmp_string(lexer.sit.begin, "mov", before_space)) {
-				lexer.tokens.push_back({Instruction_MOV});
-			} else 
-			if (cmp_string(lexer.sit.begin, "putc", before_space)) {
-				lexer.tokens.push_back({Instruction_PUTC});
-			} else 
-			if (cmp_string(lexer.sit.begin, "puti", before_space)) {
-				lexer.tokens.push_back({Instruction_PUTI});
-			} else 
-			if (cmp_string(lexer.sit.begin, "puts", before_space)) {
-				lexer.tokens.push_back({Instruction_PUTS});
-			} else 
-			{return false;}
-			return true;
+				mew::string::CountRightBefore(sit.begin, spaces);
+			char buffer[before_space+1];
+			memcpy(buffer, sit.begin, before_space);				
+			buffer[before_space] = '\0';
+			builder << builder.AddressFunction(buffer);
+			sit += before_space;
 		}
-
-		bool CheckString(Lexer& lexer) {
-			if (*(lexer.sit) == '"') {
-				std::string buffer;
-				size_t it = 0;
-				while (!lexer.sit.IsEnd()) {
-					char c = *(++lexer.sit);
-					if (c == '"' && buffer[it] != '\\') {
-						lexer.tokens.push_back({Instruction_NONE, (char*)buffer.c_str()});
-						break;
-					} 
-					else if (buffer[it] != '\\' && c == 'n') {
-						buffer[it] = '\n';		
-					} 
-					else if (buffer[it] != '\\' && c == 't') {
-						buffer[it] = '\t';		
-					} 
-					else if (buffer[it] != '\\' && c == 'r') {
-						buffer[it] = '\r';		
-					} 
-					else if (buffer[it] != '\\' && c == '0') {
-						buffer[it] = '\0';		
-					} 
-					else {
-						buffer[it++] = c;
-					}
-				}
+		
+		void GetNextType(StringIterator& sit, Virtual::Lib::Builder& builder) {
+			if (cmp_string(sit.begin, "mem", 3)) {
+				sit += 3;
+				builder << Instruction_MEM;
+			} 
+			else if (cmp_string(sit.begin, "rmem", 4)) {
+				sit += 4;
+				builder << Instruction_RMEM;
+			}
+			else if (cmp_string(sit.begin, "num", 3)) {
+				sit += 3;
+				builder << Instruction_NUM;
 			}
 		}
 
+		void GetNextNumber(StringIterator& sit, Virtual::Lib::Builder& builder) {
+			size_t before_space =
+				mew::string::CountRightBefore(sit.begin, spaces);
+			char buffer[before_space+1];
+			memcpy(buffer, sit.begin, before_space);				
+			buffer[before_space] = '\0';
+			char* p;
+			uint num = (uint)strtol(buffer, &p, 10);
+			MewAssert(*p == 0);
+			builder << num;
+			sit += before_space;
+		}
 
-		void Tokenize(Lexer& lexer, const char* source) {
+		void GetNumberNextType(StringIterator& sit, Virtual::Lib::Builder& builder) {
+			GetNextType(sit, builder);
+			size_t before_space =
+				mew::string::CountRightBefore(sit.begin, spaces);
+			int num = 1;
+			if (*sit.begin == '-') {
+				num = -1;
+				before_space--;
+				sit++;
+			}
+			char buffer[before_space+1];
+			memcpy(buffer, sit.begin, before_space);				
+			buffer[before_space] = '\0';
+			char* p;
+			num *= (int)strtol(buffer, &p, 10);
+			MewAssert(*p == 0);
+			builder << num;
+			sit += before_space;
+		}
+		
+		Virtual::Code* ProccessCode(const char* source) {
+			Virtual::Lib::Builder builder;
 			StringIterator sit(source);
-			lexer.sit = sit;
-			while (!lexer.sit.IsEnd()) {
-				char symbol = *(lexer.sit++);
+			while (!sit.IsEnd()) {
+				char symbol = *(sit++);
 				switch (symbol) {
 					SKIP_SINGLE_TOKEN(' ');
 					SKIP_SINGLE_TOKEN('\t');
@@ -146,43 +86,176 @@ namespace Virtual {
 					SKIP_SINGLE_TOKEN('\b');
 					SKIP_SINGLE_TOKEN('\n');
 					default:
-						if (CheckString(lexer)) { }
-						else if (!CheckKeyWords(lexer)) {
-							lexer.tokens.push_back({Instruction_NONE}); 
+						size_t before_space =
+							mew::string::CountRightBefore(sit.begin, spaces);
+						if (cmp_string(sit.begin, "push", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_PUSH;
+							GetNumberNextType(sit, builder);
+						} else 
+						if (cmp_string(sit.begin, "pop", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_POP;
+						} else 
+						if (cmp_string(sit.begin, "inc", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_INC;
+							GetNextType(sit, builder); /* a */
+						} else 
+						if (cmp_string(sit.begin, "dec", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_DEC;
+							GetNextType(sit, builder); /* a */
+						} else 
+						if (cmp_string(sit.begin, "add", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_ADD;
+							GetNextType(sit, builder); /* a */
+							GetNextType(sit, builder); /* b */
+						} else 
+						if (cmp_string(sit.begin, "sub", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_SUB;
+							GetNextType(sit, builder); /* a */
+							GetNextType(sit, builder); /* b */
+						} else 
+						if (cmp_string(sit.begin, "mul", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_MUL;
+							GetNextType(sit, builder); /* a */
+							GetNextType(sit, builder); /* b */
+						} else 
+						if (cmp_string(sit.begin, "div", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_DIV;
+							GetNextType(sit, builder); /* a */
+							GetNextType(sit, builder); /* b */
+						} else 
+						if (cmp_string(sit.begin, "xor", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_XOR;
+							GetNextType(sit, builder); /* a */
+							GetNextType(sit, builder); /* b */
+						} else 
+						if (cmp_string(sit.begin, "or", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_OR;
+							GetNextType(sit, builder); /* a */
+							GetNextType(sit, builder); /* b */
+						} else 
+						if (cmp_string(sit.begin, "not", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_NOT;
+							GetNextType(sit, builder); /* a */
+						} else 
+						if (cmp_string(sit.begin, "and", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_AND;
+							GetNextType(sit, builder); /* a */
+							GetNextType(sit, builder); /* b */
+						} else 
+						if (cmp_string(sit.begin, "ls", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_LS;
+							GetNextType(sit, builder); /* a */
+							GetNextType(sit, builder); /* b */
+						} else 
+						if (cmp_string(sit.begin, "rs", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_RS;
+							GetNextType(sit, builder); /* a */
+							GetNextType(sit, builder); /* b */
+						} else 
+						if (cmp_string(sit.begin, "jmp", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_JMP;
+							JumpToLabel(sit, builder);
+						} else 
+						if (cmp_string(sit.begin, "ret", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_RET;
+						} else 
+						if (cmp_string(sit.begin, "test", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_TEST;
+							GetNextType(sit, builder); /* a */
+							GetNextType(sit, builder); /* b */
+						} else 
+						if (cmp_string(sit.begin, "je", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_JE;
+							JumpToLabel(sit, builder);
+						} else 
+						if (cmp_string(sit.begin, "jl", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_JL;
+							JumpToLabel(sit, builder);
+						} else 
+						if (cmp_string(sit.begin, "jm", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_JM;
+							JumpToLabel(sit, builder);
+						} else 
+						if (cmp_string(sit.begin, "jel", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_JEL;
+							JumpToLabel(sit, builder);
+						} else 
+						if (cmp_string(sit.begin, "jem", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_JEM;
+							JumpToLabel(sit, builder);
+						} else 
+						if (cmp_string(sit.begin, "jne", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_JNE;
+							JumpToLabel(sit, builder);
+						} else 
+						if (cmp_string(sit.begin, "mov", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_MOV;
+							GetNextType(sit, builder); /* a */
+							GetNextNumber(sit, builder);
+						} else 
+						if (cmp_string(sit.begin, "putc", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_PUTC;
+							MewNotImpl();
+						} else 
+						if (cmp_string(sit.begin, "puti", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_PUTI;
+						} else 
+						if (cmp_string(sit.begin, "puts", before_space)) {
+							SKIP_WORD();
+							builder << Instruction_PUTS;
+							GetNextNumber(sit, builder);
+						} else
+						if (cmp_string(sit.begin, "data", before_space)) {
+							SKIP_WORD();
+							char buffer[512];
+							MewAssert(*sit.begin == '\'');
+							sit++;
+							int length = 0;
+							for (; *sit.begin != '\''; sit++) {
+								buffer[length++] = *sit.begin;
+							}
+							buffer[length] = '\0';
+							builder += buffer;
+						} else {
+							if (mew::string::EndWith(sit.begin, ':')) {
+								char buffer[before_space];
+								memcpy(buffer, sit.begin, before_space-1);
+								buffer[before_space] = '\0';
+								builder.BeginFunction(buffer);
+							}
+							SKIP_WORD();
 						}
 					break;
 				}
+				return builder.Build();
 			}
 		}
-	}
-	
-	Code* Compile(const char* source) {
-		CodeBuilder cb;
-
-		return *cb;
-	}
-
-	namespace fs = std::filesystem;
-	void Compile(const fs::path& path, const fs::path& end_path) {
-    std::ifstream file(path, std::ios::in | std::ios::binary);
-		file >> std::noskipws;
-		// file.seekg()
-
-		// Code* code = Compile()
-	}
-
-	void Compile(const char* path, const char* end_path) {
-    fs::path __path(path);
-    if (!__path.is_absolute()) {
-      __path = fs::absolute(__path.lexically_normal());
-    }
-    fs::path __end_path(end_path);
-    if (!__end_path.is_absolute()) {
-      __end_path = fs::absolute(__end_path.lexically_normal());
-    }
-		Compile(__path, __end_path);
-	}
-
 }
 
 #endif

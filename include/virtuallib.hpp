@@ -306,8 +306,15 @@ namespace Virtual::Lib {
     }
 
     ////////////////////////////////////////////////////////////
+    uint AddressFunction(std::string name) {
+      MewUserAssert(_functions.find(name) != _functions.end(), "undefined");
+      size_t s = _functions.at(name);
+      return (uint)s;
+    }
+
+    ////////////////////////////////////////////////////////////
     void ClearFunction(std::string name) {
-      MewUserAssert(_functions.find("name") != _functions.end(), "undefined");
+      MewUserAssert(_functions.find(name) != _functions.end(), "undefined");
       _functions.erase(name);
     }
 

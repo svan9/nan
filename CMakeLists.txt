@@ -6,5 +6,7 @@ add_compile_definitions("DEBUG=$<CONFIG:Debug>")
 set(CMAKE_CXX_FLAGS_RELEASE_INIT "-Wall -O3")
 configure_file("./mewlib/mewlib.h" "./include/" COPYONLY)
 
+include_directories("${CMAKE_SOURCE_DIR}/mewlib")
 add_subdirectory(src)
+add_subdirectory(vma)
 add_subdirectory(vm)

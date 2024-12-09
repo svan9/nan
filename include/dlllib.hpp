@@ -1,7 +1,7 @@
 #ifndef DLL_LIB_SO2U
 #define DLL_LIB_SO2U
 
-#include "mewlib.h"
+#include "mewall.h"
 #ifdef _WIN32
   #include <windows.h>
 #else
