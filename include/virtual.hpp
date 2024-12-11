@@ -106,7 +106,7 @@ namespace Virtual {
   };
 
   struct CodeManifest {
-    std::map<const char*, FuncInfo> procs;
+    // std::map<const char*, FuncInfo> procs;
   };
 
   struct Code {
@@ -213,11 +213,8 @@ namespace Virtual {
     size_t capacity;
     byte *memory, *heap, 
       *begin, *end;
-    std::stack<uint> stack;
-    // std::stack<byte> byte_stack;
-    std::stack<byte*> begin_stack;
-    std::vector<VM_Processor> procs;
-    // std::vector<void*> libs_funcs;
+    mew::stack<uint, 8U> stack;
+    mew::stack<byte*, 8U> begin_stack;
     FILE* r_stream;
     byte test;
     byte status;
@@ -255,8 +252,9 @@ namespace Virtual {
   }
 
   uint DeclareProccessor(VirtualMachine& vm, VM_Processor proc) {
-    vm.procs.push_back(proc);
-    return vm.procs.size()-1;
+    MewNotImpl();
+    // vm.procs.push_back(proc);
+    // return vm.procs.size()-1;
   }
 
   void LoadMemory(VirtualMachine& vm, Code& code) {
@@ -569,7 +567,6 @@ namespace Virtual {
     byte* pointer = vm.heap+offset;
     memcpy(pointer, &x, sizeof(x));
   }
-  
   void VM_MSet(VirtualMachine& vm) {
     uint x; /* start */
     uint y; /* size  */

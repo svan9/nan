@@ -289,7 +289,7 @@ namespace Virtual::Lib {
     std::map<std::string, VM_Processor> _externs_functions;
     std::map<std::string, Arena::Range> _vars;
     mew::stack<uint> _deferred_calc;
-    std::stack<int> _stored_points;
+    mew::stack<int> _stored_points;
     Arena _arena;
   public:
     ////////////////////////////////////////////////////////////
@@ -662,9 +662,21 @@ namespace Virtual::Lib {
       *b.actual_builder << gf;
       return b;
     }
+
+    ////////////////////////////////////////////////////////////
+    std::string GetIdConst(const wchar_t* text) const {
+      return std::string((char*)mew::get_cstr_hash(text));
+    }
+
+    ////////////////////////////////////////////////////////////
+    std::string GetIdConst(const char* text) const {
+      return std::string((char*)mew::get_cstr_hash(text));
+    }
     
     ////////////////////////////////////////////////////////////
     Builder& operator+=(const wchar_t* text) {
+      size_t __size = wcslen(text);
+      Assign(GetIdConst(text), __size);
       (*actual_builder) += text;
       return *this;
     }
@@ -676,8 +688,8 @@ namespace Virtual::Lib {
       for (int i = 0; i < length; i) {
         buffer[i] = text[i];
       }
+      Assign(GetIdConst(buffer), length);
       (*actual_builder) += buffer;
-      
       return *this;
     }
 
