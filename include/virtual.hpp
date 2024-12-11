@@ -13,6 +13,7 @@
 #include <windows.h>
 #endif
 #include "mewmath.hpp"
+#include "dlllib.hpp"
 /*
 Reference
   push <type:1b> <value:4b>
@@ -100,6 +101,14 @@ namespace Virtual {
 
   #define VIRTUAL_VERSION (Instruction_PUTS*100)+0x30
 
+  struct FuncInfo {
+    dll::_dll_farproc proc;
+  };
+
+  struct CodeManifest {
+    std::map<const char*, FuncInfo> procs;
+  };
+
   struct Code {
     size_t capacity;
     Instruction* playground;
@@ -107,9 +116,6 @@ namespace Virtual {
     byte* data = nullptr;
   };
 
-  struct CodeManifest {
-    std::vector<VM_Processor> procs;
-  };
 
   struct CodeExtended {
     CodeManifest* manifest;
