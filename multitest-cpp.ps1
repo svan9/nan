@@ -1,12 +1,12 @@
 param(
 [int]$maxtests=100
 )
-Write-Host "-------nanvma time test-------"
-Write-Host "skiped first value:" ((Measure-Command {.\build\bin\nanvma.exe .\build\bin\hellow_word.nb}).Milliseconds)
+Write-Host "-------cpp time test-------"
+Write-Host "skiped first value:" ((Measure-Command {.\opt-test\hw.exe}).Milliseconds)
 $mttime = 0
 $counts = 0
 for ($d=0; $d -le $maxtests-1; $d = $d + 1) {
-	$temp = (Measure-Command {.\build\bin\nanvma.exe .\build\bin\hellow_word.nb}).Milliseconds
+	$temp = (Measure-Command {.\opt-test\hw.exe}).Milliseconds
 	$counts = $counts + 1 
 	$mttime = $mttime + $temp
 }
