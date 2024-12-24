@@ -14,30 +14,9 @@
 #endif
 #include "mewmath.hpp"
 #include "dlllib.hpp"
-/*
-Reference
-  push <type:1b> <value:4b>
-  pop -no args-
--- Math -- 
-gets last elements from stack -> and push to top result
-  add <type:1b> <type:1b>
-  sub <type:1b> <type:1b>
-  mul <type:1b> <type:1b>
-  div <type:1b> <type:1b>
-  xor <type:1b> <type:1b>
-  or <type:1b> <type:1b>
-  not <type:1b>
-  and <type:1b> <type:1b>
-  ls <type:1b> <type:1b>
-  rs <type:1b> <type:1b>
-<- todo float math 
-  jmp <offset:4b>
-  ret -no args-
-  test -no args-
-  j<if> <offset:4b>
-  mov <type:1b> <address:4b>
- */
 
+// todo 
+// stack offset as argument wheve   
 namespace Virtual {
   struct VirtualMachine;
   typedef void(*VM_Processor)(VirtualMachine&, byte*);
@@ -99,10 +78,12 @@ namespace Virtual {
     Instruction_PUTS,
   };
 
-  #define VIRTUAL_VERSION (Instruction_PUTS*100)+0x30
+  #define VIRTUAL_VERSION (Instruction_PUTS*100)+0x32
 
   struct FuncInfo {
-    dll::_dll_farproc proc;
+    uint idx;
+    const char* name;
+    uint calloffset;
   };
 
   struct CodeManifest {
@@ -114,8 +95,8 @@ namespace Virtual {
     Instruction* playground;
     size_t data_size = 0;
     byte* data = nullptr;
+    mew::stack<FuncInfo, 8U> procs;
   };
-
 
   struct CodeExtended {
     CodeManifest* manifest;
@@ -128,12 +109,26 @@ namespace Virtual {
     std::ofstream file(path, std::ios::out | std::ios::binary);
     MewAssert(file.is_open());
     file.seekp(std::ios::beg);
+    /* version */
     uint vv = (uint)VIRTUAL_VERSION;
     file.write((const char*)(&vv), sizeof(uint));
+    /* lib procs */
+    uint code_proc_size = code.procs.size();
+    file.write((const char*)(&code_proc_size), sizeof(uint));
+    for (int i = 0; i < code_proc_size; i++) {
+      FuncInfo& info = code.procs.at((size_t)i);
+      file.write((const char*)(&info.idx),  sizeof(uint));
+      uint name_size = (uint)strlen(info.name);
+      file.write((const char*)(&name_size), sizeof(uint));
+      file.write(info.name, name_size);
+      file.write((const char*)(&info.calloffset), sizeof(uint));
+    }
+    /* code */
     file << code.capacity;
     for (int i = 0; i < code.capacity; i++) {
       file << ((byte*)code.playground)[i];
     }
+    /* data */
     file << code.data_size;
     for (int i = 0; i < code.data_size; i++) {
       file << ((byte*)code.data)[i];
@@ -149,32 +144,61 @@ namespace Virtual {
     Code_SaveFromFile(code, __path);
   }
 
-
   Code* Code_LoadFromFile(const std::filesystem::path& path) {
     std::ifstream file(path, std::ios::in | std::ios::binary);
     MewAssert(file.is_open());
     file.seekg(std::ios::beg);
     file >> std::noskipws;
+    /* version */
     uint file_version;
-    char vv[sizeof(uint)];
-    file.read(vv, sizeof(uint));
-    memcpy(&file_version, vv, sizeof(uint));
+    char buffer_vv[sizeof(uint)];
+    file.read(buffer_vv, sizeof(uint));
+    memcpy(&file_version, buffer_vv, sizeof(uint));
     if (file_version != VIRTUAL_VERSION) {
       MewWarn("file version not support (%i != %i)", file_version, VIRTUAL_VERSION); 
       return nullptr;
     }
     Code* code = new Code();
+    /* procs */
+    uint count_procs;
+    char buffer_procs[sizeof(uint)];
+    file.read(buffer_procs, sizeof(uint));
+    memcpy(&count_procs, buffer_procs, sizeof(uint));
+    code->procs.reserve(count_procs);
+    uint code_proc_size = count_procs;
+    for (int i = 0; i < code_proc_size; i++) {
+      FuncInfo info;
+      info.idx = 0;
+      
+      char buffer_x[sizeof(uint)];
+      file.read(buffer_x, sizeof(uint));
+      memcpy(&info.idx, buffer_x, sizeof(uint));
+
+      uint sssize;
+      char buffer_y[sizeof(uint)];
+      file.read(buffer_y, sizeof(uint));
+      memcpy(&sssize, buffer_y, sizeof(uint));
+
+      char* buffer_yy = new char[sssize];
+      file.read(buffer_yy, sssize);
+      info.name = buffer_yy;
+
+      char buffer_z[sizeof(uint)];
+      file.read(buffer_z, sizeof(uint));
+      memcpy(&info.calloffset, buffer_z, sizeof(uint));
+    }
+    /* code */
     file >> code->capacity;
     code->playground = new Instruction[code->capacity];
     for (int i = 0; i < code->capacity; i++) {
       file >> ((byte*)code->playground)[i];
     }
+    /* data */
     file >> code->data_size;
     code->data = new byte[code->data_size];
     for (int i = 0; i < code->data_size; i++) {
       file >> ((byte*)code->data)[i];
     }
-
     file.close();
     return code;
   }
@@ -219,6 +243,9 @@ namespace Virtual {
     byte test;
     byte status;
     VM_flags flags = HeapLockExecute;
+    mew::stack<mew::_dll_hinstance, 8U> hdlls;
+    mew::stack<mew::_dll_farproc, 8U> hprocs;
+    mew::stack<FuncInfo, 8U> procs;
   };
 
   #ifndef VM_ALLOC_ALIGN
@@ -259,10 +286,42 @@ namespace Virtual {
 
   void LoadMemory(VirtualMachine& vm, Code& code) {
     vm.memory = (byte*)code.playground;
+    vm.procs = code.procs;
+    /* load extern functions */
+    for (int i = 0; i < code.procs.size(); ++i) {
+      FuncInfo& info = code.procs.at(i);
+      mew::_dll_farproc proc = mew::GetFunction(vm.hdlls.at((size_t)info.idx), info.name);
+      vm.hprocs.pushIfNotExists(proc);
+    }
   }
 
   void VM_ManualPush(VirtualMachine& vm, uint x) {
     vm.stack.push(x);
+  }
+
+  void VM_Push(VirtualMachine& vm, byte head_byte, uint number) {
+    switch (head_byte) {
+      case 0:
+      case Instruction_FLT:
+      case Instruction_NUM: {
+        vm.stack.push(number);
+      } break;
+      case Instruction_MEM: {
+        MewUserAssert(vm.heap+number < vm.end, "out of memory");
+        byte* pointer = vm.heap+number;
+        uint x; memcpy(&x, pointer, sizeof(x));
+        vm.stack.push(x);
+      } break;
+      case Instruction_RMEM: {
+        MewUserAssert(vm.heap+number < vm.end, "out of memory");
+        vm.stack.push(number);
+      } break;
+      case Instruction_ST: {
+        MewUserAssert(vm.stack.has(number), "out of stack");
+        vm.stack.push(vm.stack.at((int)number));
+      } break;
+      default: MewNot(); break;
+    }
   }
 
   void VM_Push(VirtualMachine& vm) {
@@ -292,7 +351,13 @@ namespace Virtual {
         vm.stack.push(number);
         vm.begin += sizeof(number);
       } break;
-
+      case Instruction_ST: {
+        int number = 0;
+        memcpy(&number, vm.begin, sizeof(number));
+        MewUserAssert(vm.stack.has(number), "out of stack");
+        vm.stack.push(vm.stack.at(number));
+        vm.begin += sizeof(number);
+      } break;
       default: MewNot(); break;
     }
   }
@@ -329,7 +394,17 @@ namespace Virtual {
   }
 
   void VM_Call(VirtualMachine& vm) {
-    MewNotImpl();
+    uint number = 0;
+    memcpy(&number, vm.begin, sizeof(number));
+    vm.begin += sizeof(number);
+    MewUserAssert(vm.procs.has(number), "proc not found");
+    FuncInfo& info = vm.procs.at((int)number);
+    uint offset = info.calloffset;
+    MewUserAssert(vm.heap+offset < vm.end, "out of memory");
+    byte* pointer = vm.heap+offset;
+    byte typeofret = *vm.begin++;
+    int _ret = (vm.hprocs.at((int)info.idx))();
+    VM_Push(vm, typeofret, (uint)(_ret));
   }
 
   void VM_MathBase(VirtualMachine& vm, uint* x, uint* y, byte** mem = nullptr) {
@@ -933,6 +1008,22 @@ namespace Virtual {
       cb.UpsizeIfNeeds(i.size);
       memcpy(cb.code+cb.size, &i.data, i.size);
       cb.size += i.size;
+      return cb;
+    }
+
+    friend CodeBuilder& operator>>(CodeBuilder& cb, untyped_pair i) {
+      cb.UpsizeIfNeeds(i.size);
+      memmove(cb.code+i.size, cb.code, cb.size);
+      memcpy(cb.code, &i.data, i.size);
+      cb.size += i.size;
+      return cb;
+    }
+
+    friend CodeBuilder& operator>>(CodeBuilder& cb, CodeBuilder& i) {
+      cb.Upsize(i.capacity);
+      memcpy(cb.code+cb.size, i.code, i.capacity);
+      cb.size += i.capacity;
+      cb += i;
       return cb;
     }
 

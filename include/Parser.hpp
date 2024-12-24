@@ -3,7 +3,6 @@
 
 #include <vector>
 #include "mewall.h"
-#include "config.h"
 #include "astlib.hpp"
 #include "grammar.hpp"
 #include "lexer.hpp"
@@ -29,7 +28,7 @@ namespace Parser {
 
   bool IfTrueNext(bool cond, Iterator& it) {
     if (cond) {
-      it = it++;
+      it++;
     }
     return cond;
   }
@@ -42,6 +41,7 @@ namespace Parser {
     AST* ast;
     Lib::Builder builder;		
     std::stack<Token::Token> storage;
+    uint entry_pos;
   };
 
   typedef bool(*ParserFunc)(Parser&, Iterator&);
@@ -118,12 +118,12 @@ namespace Parser {
         if (opt->has_option("const")) {
           if (opt->has_option("const_type", "number")) {
             int value = opt->get_option_v<int>("const_value");
-            ++(parser.builder << Instruction_PUSH << Instruction_NUM << value);
+            parser.builder.Push(Instruction_NUM, value);
           }
           else if (opt->has_option("const_type", "string")) {
             parser.builder += opt->get_option("const_value").data();
             uint address = parser.builder.DataCursor();
-            ++(parser.builder << Instruction_PUSH << Instruction_NUM << address);
+            parser.builder.Push(Instruction_RMEM, address);
           }
         }
       }
@@ -163,7 +163,7 @@ namespace Parser {
     if (has_negative) {
       i_num = -i_num;
     }
-    ++(parser.builder << Instruction_PUSH << Instruction_NUM << i_num);
+    (parser.builder << Instruction_PUSH << Instruction_NUM << i_num);
     return true;
   }
 
@@ -176,7 +176,7 @@ namespace Parser {
     }
     uint address = parser.builder.DataCursor();
     parser.builder += (*it++).data;
-    ++(parser.builder << Instruction_PUSH << Instruction_NUM << address);
+    parser.builder << Instruction_PUSH << Instruction_NUM << address;
     return true;
   }
 
@@ -221,7 +221,7 @@ namespace Parser {
     int size = parser.storage.size();
     nast.add_option_v<int>("count", size);
     for (int i = 0; i < size; i++) {
-      nast.add_option_v<int>(i, parser.storage.top().data);
+      nast.add_option_kv<int>(i, parser.storage.top().data);
       parser.storage.pop();
     }
     parser.ast->append(nast);
@@ -243,36 +243,36 @@ namespace Parser {
   
   bool Typename(Parser& parser, Iterator& it) {
     Iterator stored_it(it); 
-    AST nast;
+    AST* nast = new AST();
     // 'const'?
     bool has_touches = isKindOfN(it, Token::Kind::Token_Const);
     if (has_touches) {
-      nast.add_option("const");
+      nast->add_option("const");
     }
     // WORD
-    has_touches &= isKindOf(it, Token::Kind::Token_Text);
+    has_touches = isKindOf(it, Token::Kind::Token_Text);
     if (!has_touches) {
       it = stored_it;
       return false;
     }
     auto tk = *it++;
-    nast.add_option("name", tk.data);
+    nast->add_option("name", tk.data);
     // TYPEMOD?
-    has_touches &= OneOrMore(parser, it, TypeExt);
+    has_touches = OneOrMore(parser, it, TypeExt);
     if (has_touches) {
       size_t size = parser.storage.size();
       char* buffer = new char[size];
       for (int i = 0; i < size; i++) {
         buffer[i] = parser.storage.top().kind; parser.storage.pop();
       }
-      nast.add_option("type_ext", buffer);
+      nast->add_option("type_ext", buffer);
     }
     // template_base?
-    has_touches &= TemplateBase(parser, it);
+    has_touches = TemplateBase(parser, it);
     if (has_touches) {
-      parser.global_ast = &nast;
+      parser.global_ast = nast;
       if (TemplateBaseHelper(parser, it)) {
-        nast.add_option("generic");
+        nast->add_option("generic");
       }
       parser.global_ast = nullptr;
     }
@@ -282,19 +282,19 @@ namespace Parser {
 
   bool Asignment(Parser& parser, Iterator& it) {
     Iterator stored_it(it); 
-    AST nast;
+    AST* nast = new AST();
     // 'let'?
     bool has_touches = isKindOfN(it, Token::Kind::Token_Const);
     if (has_touches) {
-      nast.add_option("let");
+      nast->add_option("let");
     }
     // typename | +stack
-    has_touches &= Typename(parser, it) && !parser.ast->is_empty();
+    has_touches = Typename(parser, it) && !parser.ast->is_empty();
     if (!has_touches) {
       it = stored_it;
       return false;
     }
-    auto _typename = parser.ast->top();
+    AST* _typename = parser.ast->top();
     int idx = parser.ast->get_option_v<int>(_typename->get_option("name"));
     auto typeref = parser.ast->at(idx);
     int typesize = typeref->get_option_v<int>("size");
@@ -306,46 +306,64 @@ namespace Parser {
         typesize = sizeof(uint);
       }
     }
-    nast.add_option_v<int>("typesize", typesize);
-    nast.append(_typename);
+    nast->add_option_v<int>("typesize", typesize);
+    nast->append(_typename);
     parser.ast->pop();
     // WORD (name)
-    has_touches &= isKindOf(it, Token::Kind::Token_Text);
+    has_touches = isKindOf(it, Token::Kind::Token_Text);
     if (!has_touches) {
       it = stored_it;
       return false;
     }
     auto tk = *it++;
-    nast.add_option("name", tk.data);
+    nast->add_option("name", tk.data);
     // TYPEMOD?
-    has_touches &= OneOrMore(parser, it, TypeExt);
+    has_touches = OneOrMore(parser, it, TypeExt);
     if (has_touches) {
       size_t size = parser.storage.size();
       char* buffer = new char[size];
       for (int i = 0; i < size; i++) {
         buffer[i] = parser.storage.top().kind; parser.storage.pop();
       }
-      nast.add_option("type_ext", buffer);
+      nast->add_option("type_ext", buffer);
     }
-    // template_base?
-    has_touches &= TemplateBase(parser, it);
-    if (has_touches) {
-      nast.add_option("generic");
-      parser.global_ast = &nast;
-      if (TemplateBaseHelper(parser, it)) {
+    parser.builder.Assign(nast->get_option("name").cbegin(), typesize, true, 0);
+    // // template_base?
+    // has_touches &= TemplateBase(parser, it);
+    // if (has_touches) {
+    //   nast.add_option("generic");
+    //   parser.global_ast = &nast;
+    //   if (TemplateBaseHelper(parser, it)) {
 
-      }
-    }
+    //   }
+    // }
     return true;
   }
 
+  bool SimpleFor(Parser& parser, Iterator& it) {
+    return false;
+  }
+
+  bool ForEach(Parser& parser, Iterator& it) {
+    return false;
+  }
+
+  bool For(Parser& parser, Iterator& it) {
+    bool has_touches = 
+      ForEach(parser, it)        ||
+      SimpleFor(parser, it)      ||
+      false;
+    return has_touches;
+  }
+
+
   bool Expression(Parser& parser, Iterator& it) {
     bool has_touches = 
-      Block(parser, it)       ||
-      String(parser, it)      ||
+      // Block(parser, it)       ||
+      // String(parser, it)      ||
       Number(parser, it)      ||
-      Variable(parser, it)    ||
       Asignment(parser, it)   ||
+      Variable(parser, it)    ||
       false;
     return has_touches;
   }
@@ -381,18 +399,47 @@ namespace Parser {
     return has_touches;
   }
 
+  bool Entry(Parser& parser, Iterator& it) {
+    Iterator stored_it(it);
+    size_t cur = parser.builder.Cursor();
+    bool has_touches =
+      isKindOfN(it, Token::Kind::Token_Entry) && Block(parser, it);
+    if (!has_touches) {
+      it = stored_it;
+      return false;
+    }
+    parser.builder.EndDefer(0, cur);
+    return true;
+  }
+
   bool Statement(Parser& parser, Iterator& it) {
+    return false;
   }
   
   bool Line(Parser& parser, Iterator& it) {
     bool has_touches = false;
-    while (ExpressionEOL(parser, it) | Statement(parser, it) | Function(parser, it)) { has_touches = true; }
+    while (
+      Entry(parser, it) ||
+      ExpressionEOL(parser, it)
+      // Statement(parser, it) ||
+      //  Function(parser, it) ||
+     ) { has_touches = true; }
     return has_touches;
   }
 
+  void InitAst(Parser& parser) {
+    parser.ast = new AST();
+    AST* ast_int = new AST();
+    ast_int->add_option_v<int>("size", 4);
+    parser.ast->append("int", ast_int);
+  }
+  
   void Parse(Parser& parser, Lexer::Lexer& lexer) {
+    InitAst(parser);
     parser.lexer = &lexer;
     Iterator it = lexer.tokens.begin();
+    parser.builder << Instruction_JMP << 4U;
+    parser.builder.BeginDefer();
     while (Line(parser, it)) {  }
   }
   

@@ -418,6 +418,18 @@ namespace Virtual::Lib {
     }
 
     ////////////////////////////////////////////////////////////
+    void EndDefer(int idx, uint s_cursor) {
+      MewUserAssert(_deferred_calc.has(idx), "undefined");
+      uint cursor = _deferred_calc.at(idx);
+      byte* row = actual_builder->at(cursor);
+      _deferred_calc.erase(idx);
+      int offset = s_cursor - cursor - sizeof(uint);
+      if (offset < 0) {
+        offset += sizeof(uint)/2;
+      }
+      memcpy(row, &offset, sizeof(offset));
+    }
+    ////////////////////////////////////////////////////////////
     void EndDefer(int idx) {
       MewUserAssert(_deferred_calc.has(idx), "undefined");
       uint cursor = _deferred_calc.at(idx);
@@ -656,10 +668,9 @@ namespace Virtual::Lib {
       *b.actual_builder << gf;
       return b;
     }
-
     ////////////////////////////////////////////////////////////
-    friend Builder& operator<<(Builder& b, CodeBuilder::untyped_pair gf) {
-      *b.actual_builder << gf;
+    friend Builder& operator>>(Builder& b, CodeBuilder::untyped_pair gf) {
+      *b.actual_builder >> gf;
       return b;
     }
 

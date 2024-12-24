@@ -1,3 +1,6 @@
 [submodule "mewlib"]
 	path = mewlib
 	url = https://github.com/svan9/mewlib
+[submodule "mirror-repository"]
+	path = mirror-repository
+	url = https://github.com/Tiny-C-Compiler/mirror-repository.git

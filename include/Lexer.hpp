@@ -2,10 +2,10 @@
 #define _NAN_LEXER_IMPL
 
 #include <vector>
-#include "config.h"
 #include "grammar.hpp"
 #include "mewall.h"
 #include <string>
+#include <iostream>
 
 namespace Lexer {
   struct Lexer {
@@ -15,9 +15,17 @@ namespace Lexer {
     typedef std::vector<Token::Token>::iterator Iterator;
   };
 
+  void PrintLexer(const Lexer& lex) {
+    std::cout << "{ ";
+    for (auto& tk: lex.tokens) {
+      std::cout << "[kind: "<< tk.kind << ", data: " << ((tk.data == nullptr)? "-" : tk.data) << "] "; 
+    }
+    std::cout << "}\n";
+  }
+
 #pragma region TOKENIZE
 
-  #define cmp_string(f, a, b) (strlen(a) == b && memcmp(f, a, b))
+  #define cmp_string(f, a, b) ((strlen(a) == b) && (1 == mew::strcmp(f, a, b)))
 
   bool CheckKeyWords(Lexer& lexer) {
     size_t before_space =
@@ -58,27 +66,27 @@ namespace Lexer {
     if (cmp_string(lexer.sit.begin, "extern", before_space)) {
       lexer.tokens.push_back({Token::Token_Extern});
     } else 
-    if (cmp_string(lexer.sit.begin, "char", before_space)) {
-      lexer.tokens.push_back({Token::Token_Char});
-    } else 
-    if (cmp_string(lexer.sit.begin, "float", before_space)) {
-      lexer.tokens.push_back({Token::Token_Float});
-    } else 
-    if (cmp_string(lexer.sit.begin, "double", before_space)) {
-      lexer.tokens.push_back({Token::Token_Double});
-    } else 
-    if (cmp_string(lexer.sit.begin, "int", before_space)) {
-      lexer.tokens.push_back({Token::Token_Integer});
-    } else 
+    // if (cmp_string(lexer.sit.begin, "char", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_Char});
+    // } else 
+    // if (cmp_string(lexer.sit.begin, "float", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_Float});
+    // } else 
+    // if (cmp_string(lexer.sit.begin, "double", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_Double});
+    // } else 
+    // if (cmp_string(lexer.sit.begin, "int", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_Integer});
+    // } else 
     if (cmp_string(lexer.sit.begin, "unsigned", before_space)) {
       lexer.tokens.push_back({Token::Token_Unsigned});
     } else 
     if (cmp_string(lexer.sit.begin, "short", before_space)) {
       lexer.tokens.push_back({Token::Token_Short});
     } else 
-    if (cmp_string(lexer.sit.begin, "string", before_space)) {
-      lexer.tokens.push_back({Token::Token_String});
-    } else 
+    // if (cmp_string(lexer.sit.begin, "string", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_String});
+    // } else 
     if (cmp_string(lexer.sit.begin, "let", before_space)) {
       lexer.tokens.push_back({Token::Token_Let});
     } else 
@@ -89,27 +97,26 @@ namespace Lexer {
       lexer.tokens.push_back({Token::Token_Void});
     } else 
     {return false;}
+    lexer.sit += before_space;
     return true;
   }
 
   bool CheckText(Lexer& lexer) {
     std::string buffer;
-    size_t it = 0;
     while (!lexer.sit.IsEnd()) {
-      char c = *(++lexer.sit);
+      char c = *(lexer.sit++);
       if (
-        buffer[it] == ' '  ||
-        buffer[it] == '\t' ||
-        buffer[it] == '\r' ||
-        buffer[it] == '\n' ||
-        buffer[it] == '\v' ||
-        buffer[it] == '\f'
+        mew::string::CharInString(" \t\r\n\v\f.,*#;:\'\"(){}[]+=-/@#$!%^&*`~|<>?", c)
       ) {
-        lexer.tokens.push_back({Token::Token_Text, (char*)buffer.c_str()});
+        lexer.sit--;
+        char* sb = new char[buffer.size()+1];
+        memcpy(sb, buffer.c_str(), buffer.size());
+        sb[buffer.size()] = '\0';
+        lexer.tokens.push_back({Token::Token_Text, sb});
         break;
       } 
       else {
-        buffer[it++] = c;
+        buffer += c;
       }
     }
     return true;
@@ -151,7 +158,7 @@ namespace Lexer {
 
   void Tokenize(Lexer& lexer, const char* source) {
     lexer.source = source;
-    lexer.sit = StringIterator(source);
+    lexer.sit = mew::string::StringIterator(source);
     while (!lexer.sit.IsEnd()) {
       char symbol = *(lexer.sit++);
       switch (symbol) {
@@ -202,6 +209,7 @@ namespace Lexer {
         SKIP_SINGLE_TOKEN('\b');
         SKIP_SINGLE_TOKEN('\n');
         default:
+          lexer.sit--;
           if (CheckString(lexer)) { }
           else if (!CheckKeyWords(lexer)) {
             CheckText(lexer);

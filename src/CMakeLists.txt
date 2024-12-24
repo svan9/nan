@@ -12,8 +12,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_compile_options(-fconcepts)
 add_compile_options(-fpermissive)
 
-aux_source_directory("./" SOURCE)
+# aux_source_directory("./" SOURCE)
 
-add_executable(${PROJECT_NAME} ${SOURCE})
+add_executable(${PROJECT_NAME} "./main.cpp")
 target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(${PROJECT_NAME} -static-libgcc -static-libstdc++)

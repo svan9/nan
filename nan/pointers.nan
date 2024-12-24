@@ -27,7 +27,7 @@ use std;
 entry {
 	// static array
 	int* st_array = new(10*sizeof(int));
-	// all pointer native has range-type 
+	// all pointer native has range-type
 	// u can get real size of pointer
 	uint size_of_sta = sizeof(int, st_array);
 	uint byte_size_of_sta = sizeof(st_array);
@@ -41,6 +41,7 @@ entry {
 		st_array![i] = i;
 	}
 	mem_range dyn_array(10);
+	
 	// has foreach iterator
 	foreach (byte& x: mem_range) {
 		// u can real set
@@ -53,3 +54,24 @@ entry {
 	dyn_array[-1] = 1;
 	return OK(); // all is free if its main entry
 }
+
+// repeat N times (const)
+// while(10) {
+// 		puti(#N);
+// }
+// traslate to --->
+// 		puti(0);
+// 		puti(1);
+// 		puti(2);
+// 		puti(3);
+// 		puti(4);
+// 		puti(5);
+// 		puti(6);
+// 		puti(7);
+// 		puti(8);
+// 		puti(9);
+
+// repeat with condition
+// while(conditional == true) {
+// 		puti(#N);
+// }

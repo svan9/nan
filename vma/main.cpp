@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
     if (argc > 2) {
       saved = (char*)real_args[1];
     } else {
-      saved = "./temp.nb";
+      saved = (char*)"./temp.nb";
     }
     Virtual::Code_SaveFromFile(*code, (const char*)saved);
   }

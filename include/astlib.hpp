@@ -29,9 +29,9 @@ class AST_base {
 public:
 	// typedef std::string_view OPT_KEY;
 	// typedef std::string_view OPT_VAL;
-	typedef AST_base Element_t;
+	typedef AST_base<OPT_KEY, OPT_VAL> Element_t;
 	typedef Element_t* data_element_t;
-	typedef std::vector<data_element_t> datatype_t;
+	typedef mew::stack<data_element_t> datatype_t;
 	typedef std::unordered_map<OPT_KEY, OPT_VAL> opttype_t;
 private:
 	opttype_t  _M_options;
@@ -40,12 +40,15 @@ private:
 	////////////////////////////////////////////////////////////
 	void rm_pop() {
 		MewAssert(_M_data.size() >= 1);
-		_M_data.pop_back();
+		_M_data.erase();
 	}
 public:
 
 	////////////////////////////////////////////////////////////
 	AST_base() {}
+
+	////////////////////////////////////////////////////////////
+	AST_base(Element_t* e): _M_options(e->_M_options), _M_data(e->_M_data) { }
 
 	////////////////////////////////////////////////////////////
 	AST_base(opttype_t& op) { _M_options = op; }
@@ -63,17 +66,24 @@ public:
 	void options(opttype_t& value) { _M_options = value; }
 	
 	////////////////////////////////////////////////////////////
-	void append(Element_t& tk) { _M_data.push_back(&tk); }
+	void append(Element_t* tk) { 
+		_M_data.push(&tk);
+	}
 
 	////////////////////////////////////////////////////////////
-	void append(const Element_t& tk) {_M_data.push_back(&tk); }
+	void append(OPT_KEY key, Element_t* tk) { 
+		uint idx = _M_data.size();
+		append(tk);
+		add_option_v<uint>(key, idx);
+	}
 
 	////////////////////////////////////////////////////////////
-	void append(Element_t* tk) { _M_data.push_back(tk); }
-		
+	void append(Element_t& tk) {
+		_M_data.emplace(&tk);
+	}
+
 	////////////////////////////////////////////////////////////
 	Element_t* at(int idx) {
-		size_t real_idx = (_M_data.size() + idx) % _M_data.size();
 		return _M_data.at(idx);
 	}
 
@@ -127,7 +137,7 @@ public:
 	
 	////////////////////////////////////////////////////////////
 	bool has_option(OPT_KEY key) {
-		return (_M_options.find("f") != _M_options.end());
+		return (_M_options.find(key) != _M_options.end());
 	}
 
 	////////////////////////////////////////////////////////////
@@ -161,55 +171,54 @@ public:
 	////////////////////////////////////////////////////////////
 	template<typename T, typename K>
 	K get_option_v(const T& key) {
-		char bk[sizeof(T)];
+		char* bk = new char[sizeof(T)];
 		memcpy(bk, &key, sizeof(T));
 		return get_option_v<K>(bk);
 	}
 
 	////////////////////////////////////////////////////////////
 	template<typename T>
-	void add_option_v(OPT_KEY key, T&& value) {
-		char buffer[sizeof(T)];
+	void add_option_v(OPT_KEY key, T& value) {
+		char* buffer = new char[sizeof(T)];
 		memcpy(buffer, &value, sizeof(T));
 		add_option(key, buffer, sizeof(T));
 	}
-
 	////////////////////////////////////////////////////////////
 	template<typename T>
-	void add_option_v(OPT_KEY key, const T& value) {
-		char buffer[sizeof(T)];
+	void add_option_v(OPT_KEY key, T&& value) {
+		char* buffer = new char[sizeof(T)];
 		memcpy(buffer, &value, sizeof(T));
 		add_option(key, buffer, sizeof(T));
 	}
 
 	////////////////////////////////////////////////////////////
 	template<typename T, typename K>
-	void add_option_v(const T& key, const K& value) {
-		char bk[sizeof(T)+1];
+	void add_option_kv(T& key, K& value) {
+		char* bk = new char[sizeof(T)+1];
 		memcpy(bk, &key, sizeof(T));
 		bk[sizeof(T)] = '\0';
-		char bv[sizeof(K)];
+		char* bv = new char[sizeof(K)];
 		memcpy(bv, &value, sizeof(K));
 		add_option(bk, bv, sizeof(K));
 	}
 
-	////////////////////////////////////////////////////////////
-	template<typename T>
-	void add_option_v(const T& key, OPT_VAL value) {
-		char bk[sizeof(T)+1];
-		memcpy(bk, &key, sizeof(T));
-		bk[sizeof(T)] = '\0';
-		add_option(bk, value);
-	}
+	// ////////////////////////////////////////////////////////////
+	// template<typename T>
+	// void add_option_v(const T& key, OPT_VAL value) {
+	// 	char bk[sizeof(T)+1];
+	// 	memcpy(bk, &key, sizeof(T));
+	// 	bk[sizeof(T)] = '\0';
+	// 	add_option(bk, value);
+	// }
 
-	////////////////////////////////////////////////////////////
-	template<typename T>
-	void add_option_v(const T& key, const char* value, size_t size) {
-		char bk[sizeof(T)+1];
-		memcpy(bk, &key, sizeof(T));
-		bk[sizeof(T)] = '\0';
-		add_option(bk, value, size);
-	}
+	// ////////////////////////////////////////////////////////////
+	// template<typename T>
+	// void add_option_v(const T& key, const char* value, size_t size) {
+	// 	char bk[sizeof(T)+1];
+	// 	memcpy(bk, &key, sizeof(T));
+	// 	bk[sizeof(T)] = '\0';
+	// 	add_option(bk, value, size);
+	// }
 };
 
 typedef AST_base<std::string_view, std::string_view> AST;

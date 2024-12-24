@@ -8,36 +8,6 @@
 
 #endif
 
-const char* executable_name() {
-#if defined(PLATFORM_POSIX) || defined(__linux__) //check defines for your setup
-	std::string sp;
-	std::ifstream("/proc/self/comm") >> sp;
-	return sp.c_str();
-
-#elif defined(_WIN32)
-	char* buf = new char[MAX_PATH];
-	GetModuleFileNameA(NULL, buf, MAX_PATH);
-	return buf;
-
-#else
-	MewUserAssert(false, "unrecognized platform");
-#endif
-}
-
-char** SkipToExec(int argc, char** args) {
-	const char* exec_name = executable_name(); 
-	char** begin = args;
-	char** end = args+(argc*sizeof(*args));
-	while (begin != end) {
-		char* arg = *(begin++);
-		// printf("\n{[%s][%s]}", exec_name, arg);
-		if (strcmp(arg, exec_name) == 0) {
-			return begin;
-		}
-	}
-	return nullptr;
-}
-
 // #include <stdafx.h>
 #include <iostream>
 using namespace std;
@@ -50,15 +20,35 @@ using namespace std;
 	#include "Wincon.h"
 #endif
 
+#define HELP_PAGE \
+	"Usage:\n" \
+	"> ./nanvm <path/to/file>" \
+	"Flags:\n" \
+	"-h, --help\t\tShow this help page\n" 
+
 int main(int argc, char** argv) {
-		if (argc < 2) {
-		printf("Usage:\n");
-		printf("> ./nanvm <path/to/file>");
-		exit(1);
+	mew::args __args(argc, argv);
+	__args.normalize();
+
+	if (
+		__args.has_needs(1)   ||
+		__args.has("-h")      ||
+		__args.has("--help")
+	) {
+		printf(HELP_PAGE); exit(0);
 	}
-	const char** real_args = (const char**)SkipToExec(argc, argv);
-	const char* path = real_args[0];
-	Virtual::Execute(path);
+
+	auto libs = __args.getStartsWith("-L");
+	mew::stack<mew::_dll_hinstance, 8U> hdlls;
+	for (int i = 0; i < libs.size(); i++) {
+		hdlls.push(mew::LoadDll(libs.at(i)));
+	}
+	
+	const char* path = __args.getNextPath();
+	Virtual::VirtualMachine vm;
+	Virtual::Code* code = Virtual::Code_LoadFromFile(path);
+	vm.hdlls = hdlls;
+	Virtual::Execute(vm, *code);
 
 #ifdef _WIN32
 	HWND consoleWnd = GetConsoleWindow();
