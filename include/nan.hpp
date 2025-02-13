@@ -5,6 +5,7 @@
 #include "lexer.hpp"
 #include "parser.hpp"
 #include "virtual.hpp"
+#include "compiler.hpp"
 // #include "virtuallib.hpp"
 
 #endif

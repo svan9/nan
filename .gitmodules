@@ -4,3 +4,6 @@
 [submodule "mirror-repository"]
 	path = mirror-repository
 	url = https://github.com/Tiny-C-Compiler/mirror-repository.git
+[submodule "json"]
+	path = json
+	url = https://github.com/nlohmann/json.git

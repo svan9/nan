@@ -22,33 +22,34 @@ using namespace std;
 
 #define HELP_PAGE \
 	"Usage:\n" \
-	"> ./nanvm <path/to/file>" \
+	"> ./nanvm <path/to/file>\n" \
 	"Flags:\n" \
 	"-h, --help\t\tShow this help page\n" 
 
 int main(int argc, char** argv) {
 	mew::args __args(argc, argv);
 	__args.normalize();
+	// __args.print();
 
 	if (
-		__args.has_needs(1)   ||
+		!__args.has_needs(1)   ||
 		__args.has("-h")      ||
 		__args.has("--help")
 	) {
 		printf(HELP_PAGE); exit(0);
 	}
 
-	auto libs = __args.getStartsWith("-L");
-	mew::stack<mew::_dll_hinstance, 8U> hdlls;
-	for (int i = 0; i < libs.size(); i++) {
-		hdlls.push(mew::LoadDll(libs.at(i)));
-	}
+	// auto libs = __args.getStartsWith("-L");
+	// mew::stack<mew::_dll_hinstance, 8U> hdlls;
+	// for (int i = 0; i < libs.size(); i++) {
+	// 	hdlls.push(mew::LoadDll(libs.at(i)));
+	// }
 	
-	const char* path = __args.getNextPath();
+	const char* path = __args.getNextPath();//;
 	Virtual::VirtualMachine vm;
 	Virtual::Code* code = Virtual::Code_LoadFromFile(path);
-	vm.hdlls = hdlls;
-	Virtual::Execute(vm, *code);
+	// vm.hdlls = hdlls;
+	int exit_code = Virtual::Execute(vm, *code);
 
 #ifdef _WIN32
 	HWND consoleWnd = GetConsoleWindow();
@@ -59,5 +60,5 @@ int main(int argc, char** argv) {
 		system("pause");
 	}	
 #endif
-	return 0;
+	return exit_code;
 }

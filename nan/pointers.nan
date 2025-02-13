@@ -24,9 +24,21 @@ use std;
 // - param mem_range {mem_range} - old range
 // - param init_byte_size {uint} - size of allocate bytes 
 
+struct mem_range {
+	uint start;
+	uint size;
+};
+
+void* new(uint size) {
+	let char _st[size];
+	return &_st;
+}
+
 entry {
 	// static array
 	int* st_array = new(10*sizeof(int));
+	
+	int* st = &st_array;
 	// all pointer native has range-type
 	// u can get real size of pointer
 	uint size_of_sta = sizeof(int, st_array);

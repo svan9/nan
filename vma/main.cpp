@@ -61,16 +61,6 @@ enum CompilerFlags_: uint {
   CompilerFlags_Test    = 1 << 3, 
 };
 
-static const char* test_string = 
-"loop:\n"
-"push num 9\n"
-"push mem 0\n"
-"test mem num\n"
-"push rmem 0\n"
-"inc mem\n"
-"jmp loop\n"
-;
-
 int main(int argc, char** argv) {
   if (argc < 2) {
     printf("Usage:\n");

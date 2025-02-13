@@ -7,6 +7,7 @@ add_compile_definitions("DEBUG=$<CONFIG:Debug>")
 set(CMAKE_CXX_FLAGS_RELEASE "-Ofast")
 
 include_directories("${CMAKE_SOURCE_DIR}/mewlib")
+# add_subdirectory(json)
 add_subdirectory(src)
-add_subdirectory(vma)
+# add_subdirectory(vma)
 add_subdirectory(vm)

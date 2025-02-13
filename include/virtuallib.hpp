@@ -330,6 +330,17 @@ namespace Virtual::Lib {
     }
 
     ////////////////////////////////////////////////////////////
+    void to_entry(size_t line) {
+      int real_idx = Cursor() - line;
+      CodeBuilder::untyped_pair pair;
+      pair.size = 5;
+      pair.data = new byte[5];
+      pair.data[0] = Instruction_JMP;
+      memcpy(pair.data+1, &real_idx, sizeof(real_idx));
+      ((*this) >> pair);
+    }
+
+    ////////////////////////////////////////////////////////////
     void CallExternFunction(size_t idx) {
       ((*this) << Instruction_CALL << (uint)idx);
     }
@@ -364,8 +375,20 @@ namespace Virtual::Lib {
     }
 
     ////////////////////////////////////////////////////////////
-    void Puti(Instruction type = Instruction_NUM) {
-      ((*this) << Instruction_PUTI << type);
+    void Puti(int offset) {
+      ((*this) << Instruction_PUTI << (uint)offset);
+    }
+
+    ////////////////////////////////////////////////////////////
+    void Puts(std::string name) {
+      MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
+      auto range = _vars.at(name);
+      ((*this) << Instruction_PUTS << (uint)range.start);
+    }
+
+    ////////////////////////////////////////////////////////////
+    void MovRDI(int offset) {
+      ((*this) << Instruction_PUSH << offset);
     }
 
     ////////////////////////////////////////////////////////////
@@ -503,11 +526,12 @@ namespace Virtual::Lib {
     }
 
     ////////////////////////////////////////////////////////////
-    void Inc(std::string name) {
-      MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
-      auto range = _vars.at(name);
-      ((*this) << Instruction_PUSH << Instruction_RMEM << (uint)range.start);
-      ((*this) << Instruction_INC  << Instruction_MEM);
+    void Inc(int offset) {
+      ((*this) << Instruction_INC  << offset);
+    }
+    ////////////////////////////////////////////////////////////
+    void Dec(int offset) {
+      ((*this) << Instruction_DEC  << offset);
     }
     
     ////////////////////////////////////////////////////////////
@@ -536,9 +560,15 @@ namespace Virtual::Lib {
     }
 
     ////////////////////////////////////////////////////////////
+    void Push(std::string varname) {
+      MewUserAssert(_vars.find(varname) != _vars.end(), "undefined");
+      auto range = _vars.at(varname);
+      ((*this) << Instruction_PUSH << Instruction_RMEM << (uint)range.start);
+    }
+
+    ////////////////////////////////////////////////////////////
     void Push(byte type, int value) {
       ((*this) << Instruction_PUSH << type << value);
-      
     }
 
     ////////////////////////////////////////////////////////////
@@ -624,11 +654,6 @@ namespace Virtual::Lib {
     }
 
     ////////////////////////////////////////////////////////////
-    const size_t AbsCursor() const noexcept {
-      return (*actual_builder).abs_code_size();
-    }
-
-    ////////////////////////////////////////////////////////////
     const size_t DataCursor() const noexcept {
       return (*actual_builder).data_size();
     }
@@ -643,6 +668,12 @@ namespace Virtual::Lib {
     friend Builder& operator<<(Builder& b, CodeBuilder& gf) {
       *b.actual_builder << gf;
       return b;
+    }
+
+    ////////////////////////////////////////////////////////////
+    Builder& concat(Builder& gf) {
+      *actual_builder << *gf.actual_builder;
+      return *this;
     }
 
     ////////////////////////////////////////////////////////////
@@ -668,6 +699,7 @@ namespace Virtual::Lib {
       *b.actual_builder << gf;
       return b;
     }
+
     ////////////////////////////////////////////////////////////
     friend Builder& operator>>(Builder& b, CodeBuilder::untyped_pair gf) {
       *b.actual_builder >> gf;
@@ -700,6 +732,18 @@ namespace Virtual::Lib {
         buffer[i] = text[i];
       }
       Assign(GetIdConst(buffer), length);
+      (*actual_builder) += buffer;
+      return *this;
+    }
+
+    ////////////////////////////////////////////////////////////
+    Builder& AddData(std::string name, const char* text) {
+      size_t length = strlen(text)+1;
+      wchar_t* buffer = new wchar_t[length];
+      for (int i = 0; i < length; i) {
+        buffer[i] = text[i];
+      }
+      Assign(name, length);
       (*actual_builder) += buffer;
       return *this;
     }

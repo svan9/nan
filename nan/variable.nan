@@ -1,3 +1,13 @@
+
+int foo_args(int number, char symbol) {
+	return number;
+}
+
+void foo() @flag {
+	return;
+}
+
 entry {
-	int number;
+	int number = 10;
+	foo();
 }

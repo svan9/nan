@@ -81,6 +81,21 @@ enum Kind: unsigned long long {
 	// Token_Digit = Token_One | Token_Two | Token_Three | Token_Four | Token_Five | Token_Six | Token_Seven | Token_Eight | Token_Nine | Token_Zero,
 // .. 
 	Token_Text,
+	// NANVM
+	Token_PUTS,
+	Token_PUTC,
+	Token_PUTI,
+	Token_PUSH,
+	Token_POP,
+	Token_TEST,
+	Token_JEL,
+	Token_JEM,
+	Token_JE,
+	Token_JL,
+	Token_JM,
+	Token_JNE,
+	Token_INC,
+	Token_DEC,
 };
 
 struct Token {

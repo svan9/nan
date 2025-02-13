@@ -33,39 +33,69 @@ namespace Lexer {
     if (cmp_string(lexer.sit.begin, "entry", before_space)) {
       lexer.tokens.push_back({Token::Token_Entry});
     } else 
-    if (cmp_string(lexer.sit.begin, "use", before_space)) {
-      lexer.tokens.push_back({Token::Token_Use});
+    if (cmp_string(lexer.sit.begin, "test", before_space)) { 
+      lexer.tokens.push_back({Token::Token_TEST});
+    } else
+    if (cmp_string(lexer.sit.begin, "jel", before_space)) { 
+      lexer.tokens.push_back({Token::Token_JEL});
+    } else
+    if (cmp_string(lexer.sit.begin, "jem", before_space)) { 
+      lexer.tokens.push_back({Token::Token_JEM});
+    } else
+    if (cmp_string(lexer.sit.begin, "je", before_space)) { 
+      lexer.tokens.push_back({Token::Token_JE});
+    } else
+    if (cmp_string(lexer.sit.begin, "jl", before_space)) { 
+      lexer.tokens.push_back({Token::Token_JL});
+    } else
+    if (cmp_string(lexer.sit.begin, "jm", before_space)) { 
+      lexer.tokens.push_back({Token::Token_JM});
+    } else
+    if (cmp_string(lexer.sit.begin, "jne", before_space)) { 
+      lexer.tokens.push_back({Token::Token_JNE});
+    } else
+    if (cmp_string(lexer.sit.begin, "inc", before_space)) { 
+      lexer.tokens.push_back({Token::Token_INC});
+    } else
+    if (cmp_string(lexer.sit.begin, "dec", before_space)) { 
+      lexer.tokens.push_back({Token::Token_DEC});
+    } else
+    // if (cmp_string(lexer.sit.begin, "use", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_Use});
+    // } else 
+    if (cmp_string(lexer.sit.begin, "ret", before_space)) {
+      lexer.tokens.push_back({Token::Token_Ret});
     } else 
     if (cmp_string(lexer.sit.begin, "ret", before_space)) {
       lexer.tokens.push_back({Token::Token_Ret});
     } else 
-    if (cmp_string(lexer.sit.begin, "class", before_space)) {
-      lexer.tokens.push_back({Token::Token_Class});
-    } else 
-    if (cmp_string(lexer.sit.begin, "for", before_space)) {
-      lexer.tokens.push_back({Token::Token_For});
-    } else 
-    if (cmp_string(lexer.sit.begin, "while", before_space)) {
-      lexer.tokens.push_back({Token::Token_While});
-    } else 
-    if (cmp_string(lexer.sit.begin, "interface", before_space)) {
-      lexer.tokens.push_back({Token::Token_Interface});
-    } else 
-    if (cmp_string(lexer.sit.begin, "struct", before_space)) {
-      lexer.tokens.push_back({Token::Token_Struct});
-    } else 
-    if (cmp_string(lexer.sit.begin, "static", before_space)) {
-      lexer.tokens.push_back({Token::Token_Static});
-    } else 
-    if (cmp_string(lexer.sit.begin, "expand", before_space)) {
-      lexer.tokens.push_back({Token::Token_Expand});
-    } else 
-    if (cmp_string(lexer.sit.begin, "narrow", before_space)) {
-      lexer.tokens.push_back({Token::Token_Narrow});
-    } else 
-    if (cmp_string(lexer.sit.begin, "extern", before_space)) {
-      lexer.tokens.push_back({Token::Token_Extern});
-    } else 
+    // if (cmp_string(lexer.sit.begin, "class", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_Class});
+    // } else 
+    // if (cmp_string(lexer.sit.begin, "for", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_For});
+    // } else 
+    // if (cmp_string(lexer.sit.begin, "while", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_While});
+    // } else 
+    // if (cmp_string(lexer.sit.begin, "interface", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_Interface});
+    // } else 
+    // if (cmp_string(lexer.sit.begin, "struct", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_Struct});
+    // } else 
+    // if (cmp_string(lexer.sit.begin, "static", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_Static});
+    // } else 
+    // if (cmp_string(lexer.sit.begin, "expand", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_Expand});
+    // } else 
+    // if (cmp_string(lexer.sit.begin, "narrow", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_Narrow});
+    // } else 
+    // if (cmp_string(lexer.sit.begin, "extern", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_Extern});
+    // } else 
     // if (cmp_string(lexer.sit.begin, "char", before_space)) {
     //   lexer.tokens.push_back({Token::Token_Char});
     // } else 
@@ -78,24 +108,24 @@ namespace Lexer {
     // if (cmp_string(lexer.sit.begin, "int", before_space)) {
     //   lexer.tokens.push_back({Token::Token_Integer});
     // } else 
-    if (cmp_string(lexer.sit.begin, "unsigned", before_space)) {
-      lexer.tokens.push_back({Token::Token_Unsigned});
-    } else 
-    if (cmp_string(lexer.sit.begin, "short", before_space)) {
-      lexer.tokens.push_back({Token::Token_Short});
-    } else 
-    // if (cmp_string(lexer.sit.begin, "string", before_space)) {
-    //   lexer.tokens.push_back({Token::Token_String});
+    // if (cmp_string(lexer.sit.begin, "unsigned", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_Unsigned});
     // } else 
-    if (cmp_string(lexer.sit.begin, "let", before_space)) {
-      lexer.tokens.push_back({Token::Token_Let});
-    } else 
-    if (cmp_string(lexer.sit.begin, "const", before_space)) {
-      lexer.tokens.push_back({Token::Token_Const});
-    } else 
-    if (cmp_string(lexer.sit.begin, "void", before_space)) {
-      lexer.tokens.push_back({Token::Token_Void});
-    } else 
+    // if (cmp_string(lexer.sit.begin, "short", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_Short});
+    // } else 
+    // // if (cmp_string(lexer.sit.begin, "string", before_space)) {
+    // //   lexer.tokens.push_back({Token::Token_String});
+    // // } else 
+    // if (cmp_string(lexer.sit.begin, "let", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_Let});
+    // } else 
+    // if (cmp_string(lexer.sit.begin, "const", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_Const});
+    // } else 
+    // if (cmp_string(lexer.sit.begin, "void", before_space)) {
+    //   lexer.tokens.push_back({Token::Token_Void});
+    // } else 
     {return false;}
     lexer.sit += before_space;
     return true;
@@ -113,6 +143,28 @@ namespace Lexer {
         memcpy(sb, buffer.c_str(), buffer.size());
         sb[buffer.size()] = '\0';
         lexer.tokens.push_back({Token::Token_Text, sb});
+        break;
+      } 
+      else {
+        buffer += c;
+      }
+    }
+    return true;
+  }
+
+  bool CheckNumber(Lexer& lexer) {
+    std::string buffer;
+    while (!lexer.sit.IsEnd()) {
+      char c = *(lexer.sit++);
+      if (
+        mew::string::CharInString("0123456789", c)
+      ) {
+        lexer.sit--;
+        char* sb = new char[buffer.size()+1];
+        memcpy(sb, buffer.c_str(), buffer.size());
+        sb[buffer.size()] = '\0';
+        int* a = new int(atoi(sb)); 
+        lexer.tokens.push_back({Token::Token_Number, (char*)a});
         break;
       } 
       else {
@@ -162,16 +214,16 @@ namespace Lexer {
     while (!lexer.sit.IsEnd()) {
       char symbol = *(lexer.sit++);
       switch (symbol) {
-        PUSH_SINGLE_TOKEN('0', Token::Token_Zero);
-        PUSH_SINGLE_TOKEN('1', Token::Token_One);
-        PUSH_SINGLE_TOKEN('2', Token::Token_Two);
-        PUSH_SINGLE_TOKEN('3', Token::Token_Three);
-        PUSH_SINGLE_TOKEN('4', Token::Token_Four);
-        PUSH_SINGLE_TOKEN('5', Token::Token_Five);
-        PUSH_SINGLE_TOKEN('6', Token::Token_Six);
-        PUSH_SINGLE_TOKEN('7', Token::Token_Seven);
-        PUSH_SINGLE_TOKEN('8', Token::Token_Eight);
-        PUSH_SINGLE_TOKEN('9', Token::Token_Nine);
+        // PUSH_SINGLE_TOKEN('0', Token::Token_Zero);
+        // PUSH_SINGLE_TOKEN('1', Token::Token_One);
+        // PUSH_SINGLE_TOKEN('2', Token::Token_Two);
+        // PUSH_SINGLE_TOKEN('3', Token::Token_Three);
+        // PUSH_SINGLE_TOKEN('4', Token::Token_Four);
+        // PUSH_SINGLE_TOKEN('5', Token::Token_Five);
+        // PUSH_SINGLE_TOKEN('6', Token::Token_Six);
+        // PUSH_SINGLE_TOKEN('7', Token::Token_Seven);
+        // PUSH_SINGLE_TOKEN('8', Token::Token_Eight);
+        // PUSH_SINGLE_TOKEN('9', Token::Token_Nine);
         PUSH_SINGLE_TOKEN('.', Token::Token_Dot);
         PUSH_SINGLE_TOKEN(',', Token::Token_Comma);
         PUSH_SINGLE_TOKEN('*', Token::Token_Star);
@@ -182,7 +234,7 @@ namespace Lexer {
         // PUSH_SINGLE_TOKEN('\"', Token::Token_DoubleQuote);
         PUSH_SINGLE_TOKEN('`', Token::Token_ApostropheQuote);
         PUSH_SINGLE_TOKEN('=', Token::Token_Equal);
-        PUSH_SINGLE_TOKEN('-', Token::Token_Minus);
+        // PUSH_SINGLE_TOKEN('-', Token::Token_Minus);
         PUSH_SINGLE_TOKEN('/', Token::Token_Slash);
         PUSH_SINGLE_TOKEN('\\', Token::Token_BackSlash);
         PUSH_SINGLE_TOKEN('|', Token::Token_Split);
@@ -211,6 +263,7 @@ namespace Lexer {
         default:
           lexer.sit--;
           if (CheckString(lexer)) { }
+          else if (CheckNumber(lexer)) {}
           else if (!CheckKeyWords(lexer)) {
             CheckText(lexer);
             // lexer.tokens.push_back({Token::Token_KeyWord}); 

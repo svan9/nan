@@ -1,0 +1,61 @@
+[
+  {
+    "type": "entry",
+    "name": "__start"
+  },
+  {
+    "type": "data",
+    "mod": "db",
+    "name": "hellow",
+    "value": "Hellow, world\n\u0000"
+  },
+  {
+    "type": "label",
+    "name": "__start"
+  },
+  {
+    "type": "puts",
+    "value": "hellow"
+  },
+  {
+    "type": "push",
+    "value": 0
+  },
+  {
+    "type": "push",
+    "value": 10
+  },
+  {
+    "type": "label",
+    "name": "L1"
+  },
+  {
+    "type": "test"
+  },
+  {
+    "type": "jem",
+    "value": "LE1"
+  },
+  {
+    "type": "puti"
+  },
+  {
+    "type": "inc",
+    "value": 4
+  },
+  {
+    "type": "jmp",
+    "value": "L1"
+  },
+  {
+    "type": "label",
+    "name": "LE1"
+  },
+  {
+    "type": "push",
+    "value": 0
+  },
+  {
+    "type": "ret"
+  }
+]
