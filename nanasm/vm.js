@@ -6,8 +6,10 @@ function get_enum(array) {
 	});
 	return _enum;
 } 
+const Instruction = get_enum(["NONE","LDLL","CALL","PUSH","POP", "RPOP","ADD","SUB","MUL","DIV","INC","DEC","XOR","OR","NOT","AND","LS","RS","NUM","INT","FLT","DBL","UINT","BYTE","MEM","REG","HEAP","ST","JMP","RET","EXIT","TEST","JE","JEL","JEM","JNE","JL","JM","MOV","SWAP","MSET","SWST","WRITE","READ","OPEN","PUTC","PUTI","PUTS","GETCH", "MOVRDI",
+	]);
 
 export default { 
-	"Instruction": get_enum(["NONE","LDLL","CALL","PUSH","POP","ADD","SUB","MUL","DIV","INC","DEC","XOR","OR","NOT","AND","LS","RS","NUM","INT","FLT","DBL","UINT","BYTE","MEM","RMEM","HEAP","ST","JMP","RET","EXIT","TEST","JE","JEL","JEM","JNE","JL","JM","MOV","SWAP","MSET","SWST","WRITE","READ","OPEN","PUTC","PUTI","PUTS","MOVRDI",
-	])
+	Instruction,
+	"version": (Instruction["PUTS"]*100+0x34)
 };

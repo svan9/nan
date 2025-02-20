@@ -42,6 +42,12 @@ export default class nanVisitor extends antlr4.tree.ParseTreeVisitor {
 	}
 
 
+	// Visit a parse tree produced by nanParser#call.
+	visitCall(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
 	// Visit a parse tree produced by nanParser#puts.
 	visitPuts(ctx) {
 	  return this.visitChildren(ctx);
@@ -60,8 +66,56 @@ export default class nanVisitor extends antlr4.tree.ParseTreeVisitor {
 	}
 
 
+	// Visit a parse tree produced by nanParser#pop.
+	visitPop(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#rpop.
+	visitRpop(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
 	// Visit a parse tree produced by nanParser#inc.
 	visitInc(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#dec.
+	visitDec(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#gch.
+	visitGch(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#add.
+	visitAdd(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#div.
+	visitDiv(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#mul.
+	visitMul(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#sub.
+	visitSub(ctx) {
 	  return this.visitChildren(ctx);
 	}
 
@@ -120,8 +174,122 @@ export default class nanVisitor extends antlr4.tree.ParseTreeVisitor {
 	}
 
 
+	// Visit a parse tree produced by nanParser#xor.
+	visitXor(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#or.
+	visitOr(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#not.
+	visitNot(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#and.
+	visitAnd(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#ls.
+	visitLs(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#rs.
+	visitRs(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#mov.
+	visitMov(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#swap.
+	visitSwap(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#mset.
+	visitMset(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#swst.
+	visitSwst(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#write.
+	visitWrite(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#read.
+	visitRead(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#open.
+	visitOpen(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#putc.
+	visitPutc(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#tre_arg.
+	visitTre_arg(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#dua_arg.
+	visitDua_arg(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#any_arg.
+	visitAny_arg(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#register.
+	visitRegister(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
 	// Visit a parse tree produced by nanParser#rdi_offset.
 	visitRdi_offset(ctx) {
+	  return this.visitChildren(ctx);
+	}
+
+
+	// Visit a parse tree produced by nanParser#size_t.
+	visitSize_t(ctx) {
 	  return this.visitChildren(ctx);
 	}
 

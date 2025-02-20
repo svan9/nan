@@ -22,25 +22,23 @@ function abs_add(a, b) {
 }
 
 export default class CodeBuilder {
-	fns = {}
-	global_block  = {}
-	current_block = {}
 	labels = {}
 	data = {}
-	code = "";
-	current_code_cursor = 0;
-	current_code = new Uint8Array();
+	cursor = 0;
+	code = new Uint8Array();
+	data_defines = {}
 	defines = {}
+	callings = {}
 	entry = ""
 	constructor() { }
 
 	add(code) {
-		if (this.current_code.length <= this.current_code_cursor) {
-			let temp = new Uint8Array(this.current_code.length+64);
-			temp.set(this.current_code);
-			this.current_code = temp;
+		if (this.code.length <= this.cursor) {
+			let temp = new Uint8Array(this.code.length+64);
+			temp.set(this.code);
+			this.code = temp;
 		}
-		this.current_code[this.current_code_cursor++] = code;
+		this.code[this.cursor++] = code;
 	}
 
 	add_data(mod, name, value) {
@@ -73,11 +71,33 @@ export default class CodeBuilder {
 		}
 		return length;
 	}
+
+	push_arg(arg) {
+		console.log(arg);
+	}
+
+	_mov(args) {
+		this.add(vm.Instruction["MOV"]);
+		this.push_arg(args[0])
+		this.push_arg(args[1])
+	}
+
+	_call(name) {
+		this.add(vm.Instruction['CALL']);
+		if (this.labels[name] == void 0) {
+			this.callings[name] = this.callings[name] ?? [];
+			this.callings[name].push(Number(this.cursor));
+			this.cursor += 4;
+		} else {
+			this.addInt(this.labels[name]-(this.cursor+4))
+		}
+	}
 	
 	_puts(name) {
 		let offset = this.get_data_pos(name);
 		if (offset == void 0) {return false;}
 		this.add(vm.Instruction["PUTS"]);
+		this.data_defines[name] = this.cursor;
 		this.addUint(offset);
 		return true;
 	}
@@ -86,6 +106,10 @@ export default class CodeBuilder {
 		this.add(vm.Instruction["PUTI"])
 		this.addUint(offset)
 		this.add(vm.Instruction["NUM"])
+	}
+	_gch(offset) {
+		this.add(vm.Instruction["GETCH"])
+		this.addUint(offset)
 	}
 	_test() {
 		this.add(vm.Instruction["TEST"])
@@ -97,6 +121,22 @@ export default class CodeBuilder {
 		this.add(vm.Instruction["PUSH"]);
 		this.add(vm.Instruction["NUM"]);
 		this.addUint(value);
+	}
+	
+	_rpush(val) {
+		this.add(vm.Instruction["PUSH"]);
+		this.add(vm.Instruction["REG"]);
+		this.add(val.kind);
+		this.add(val.idx);
+	}
+	
+	_pop() {
+		this.add(vm.Instruction["POP"]);
+	}
+	_rpop(val) {
+		this.add(vm.Instruction["RPOP"]);
+		this.add(val.kind);
+		this.add(val.idx);
 	}
 
 	_inc(value) {
@@ -135,179 +175,212 @@ export default class CodeBuilder {
 		this.add(vm.Instruction['JEL']);
 		if (this.labels[name] == void 0) {
 			this.defines[name] = this.defines[name] ?? [];
-			this.defines[name].push(Number(this.current_code_cursor));
-			this.current_code_cursor += 4;
+			this.defines[name].push(Number(this.cursor));
+			this.cursor += 4;
 		} else {
-			this.addInt(this.current_code_cursor-this.labels[name])
+			this.addInt(this.cursor-this.labels[name])
 		}
 	}
 	_jem(name) {
 		this.add(vm.Instruction['JEM']);
 		if (this.labels[name] == void 0) {
 			this.defines[name] = this.defines[name] ?? [];
-			this.defines[name].push(Number(this.current_code_cursor));
-			this.current_code_cursor += 4;
+			this.defines[name].push(Number(this.cursor));
+			this.cursor += 4;
 		} else {
-			this.addInt(this.current_code_cursor-this.labels[name])
+			this.addInt(this.cursor-this.labels[name])
 		}
 	}
 	_je(name) {
 		this.add(vm.Instruction['JE']);
 		if (this.labels[name] == void 0) {
 			this.defines[name] = this.defines[name] ?? [];
-			this.defines[name].push(Number(this.current_code_cursor));
-			this.current_code_cursor += 4;
+			this.defines[name].push(Number(this.cursor));
+			this.cursor += 4;
 		} else {
-			this.addInt(this.current_code_cursor-this.labels[name])
+			this.addInt(this.cursor-this.labels[name])
 		}
 	}
 	_jl(name) {
 		this.add(vm.Instruction['JL']);
 		if (this.labels[name] == void 0) {
 			this.defines[name] = this.defines[name] ?? [];
-			this.defines[name].push(Number(this.current_code_cursor));
-			this.current_code_cursor += 4;
+			this.defines[name].push(Number(this.cursor));
+			this.cursor += 4;
 		} else {
-			this.addInt(this.current_code_cursor-this.labels[name])
+			this.addInt(this.cursor-this.labels[name])
 		}
 	}
 	_jm(name) {
 		this.add(vm.Instruction['JM']);
 		if (this.labels[name] == void 0) {
 			this.defines[name] = this.defines[name] ?? [];
-			this.defines[name].push(Number(this.current_code_cursor));
-			this.current_code_cursor += 4;
+			this.defines[name].push(Number(this.cursor));
+			this.cursor += 4;
 		} else {
-			this.addInt(this.current_code_cursor-this.labels[name])
+			this.addInt(this.cursor-this.labels[name])
 		}
 	}
 	_jne(name) {
 		this.add(vm.Instruction['JNE']);
 		if (this.labels[name] == void 0) {
 			this.defines[name] = this.defines[name] ?? [];
-			this.defines[name].push(Number(this.current_code_cursor));
-			this.current_code_cursor += 4;
+			this.defines[name].push(Number(this.cursor));
+			this.cursor += 4;
 		} else {
-			this.addInt(this.current_code_cursor-this.labels[name])
+			this.addInt(this.cursor-this.labels[name])
 		}
 	}
 	_jmp(name) {
 		this.add(vm.Instruction['JMP']);
 		if (this.labels[name] == void 0) {
 			this.defines[name] = this.defines[name] ?? [];
-			this.defines[name].push(Number(this.current_code_cursor));
-			this.current_code_cursor += 4;
+			this.defines[name].push(Number(this.cursor));
+			this.cursor += 4;
 		} else {
-			this.addInt(this.labels[name]-(this.current_code_cursor+4))
+			this.addInt(this.labels[name]-(this.cursor+4))
 		}
 	}
 	_ret() {
 		this.add(vm.Instruction['RET']);
 	}
-	markLabel(name) {
+	markLabel(name, cursor = void 0) {
+		let c_cursor = cursor ?? this.cursor;
 		if (this.defines[name] != void 0) {
 			this.defines[name].forEach(e=>{
-				this.setInt(this.current_code_cursor-e, e)
+				this.setInt(c_cursor-e, e);
 			});
 			this.defines[name] = void 0;
 		}
-		this.labels[name] = this.current_code_cursor;
+		this.labels[name] = c_cursor;
 	}
 	markEntry(name) {
 		this.entry = name;
 	}
+
 	setInt(code, pos) {
-		console.log(code)
-		this.current_code.set((
+		this.code.set((
 			code < 0 
 				? numToInt8Array(code) 
 				: numToUint8Array(code)),
 				pos);
 	}
+	
+	extendIfNeeds(size) {
+		if (this.code.length < size+this.cursor) {
+			let new_code = new Uint8Array(size+this.cursor+1);
+			new_code.set(this.code.slice(0, this.cursor), 0);
+			this.code = new_code;
+		}
+	}
+	
+	/**
+	 * 
+	 * @param {Uint8Array} code 
+	 */
+	add_code(code) {
+		this.extendIfNeeds(code.length);
+		// if (this.code.length < code.length+this.cursor) {
+		// 	let new_code = new Uint8Array(code.length+this.cursor+10);
+		// 	new_code.set(this.code.slice(0, this.cursor), 0);
+		// 	this.code = new_code;
+		// }
+		this.code.set(code, this.cursor);
+	}
+
 	addInt(code) {
-		console.log(code)
-		this.current_code.set((
+		this.extendIfNeeds(4);
+		this.code.set((
 			code < 0 
 				? numToInt8Array(code) 
 				: numToUint8Array(code)),
-			this.current_code_cursor);
-		this.current_code_cursor += 4;
+			this.cursor);
+		this.cursor += 4;
 	}
+
 	addUint(code) {
-		this.current_code.set(numToUint8Array(code), this.current_code_cursor);
-		this.current_code_cursor += 4;
+		this.extendIfNeeds(4);
+		this.code.set(numToUint8Array(code), this.cursor);
+		this.cursor += 4;
 	}
 
 	pushFunction(fn) {
 		this.fns[fn.name] = fn;
 	}
 
-
-	addCallFunction(fn, args) {
-		for (let i = 0; i < args.argc; ++i) {
-			// this.add(vm.Instruction.PUSH);
-			// this.add(vm.Instruction.);
-			console.log(args.content[i]);
-		}
-		// args.forEach(arg => {
-		// });	
-		// this.fns[fn.name]
-		console.log(args);
+	moveLabels(shift_size) {
+		let keys = Object.keys(this.labels);
+		keys.forEach(key=>{
+			this.labels[key] += shift_size;
+			// this.label_arg[key].forEach(([k, c]) => {
+			// 	this.setInt((c)-k, c);
+			// })
+		})
 	}
 
-	buildFunction(fn) {
-		
-	}
-
-	getFunction(name) {
-		return this.fns[name];
-	}
-	
-	beginBlock() {
-		this.current_block = {
-			"vars": {}		
-		};
-	}
-
-	pushVar(obj) {
-		this.current_block.vars[obj.name] = obj; 
-	}
-	
-	endBlock() {
-		this.current_block = {
-			"vars": {}		
-		};
+	/**
+	 * 
+	 * @param {CodeBuilder} cb 
+	 * @returns CodeBuilder
+	 */
+	link(cb) {
+		// concat datas
+		this.data = {...this.data, ...cb.data};
+		let dk = Object.keys(this.data_defines);
+		dk.forEach(k=>{
+			let pos = this.data_defines[k];
+			let offset = this.get_data_pos(k);
+			this.setInt(offset, pos);
+		})
+		let dkk = Object.keys(this.data_defines);
+		dkk.forEach(k=>{
+			let pos = cb.data_defines[k];
+			let offset = this.get_data_pos(k);
+			this.setInt(offset, pos);
+		})
+		// mark labels
+		cb.moveLabels(this.cursor);
+		let keys = Object.keys(cb.labels);
+		keys.forEach(e=>{
+			let pos = cb.labels[e];
+			pos += this.cursor;
+			this.markLabel(e, pos);
+		})
+		// concat codes
+		this.add_code(cb.code);
+		return this;
 	}
 
 	build() {
 		let data_size = this.get_data_length();
-		let len = this.current_code_cursor + data_size + 13;
+		let len = this.cursor + data_size + 13;
 		// len = (data_size-len)+this.current_code_cursor + 12;
 		let arr = new Uint8Array(len);
 		let data_arr = new Uint8Array(data_size);
 		let data_cursor = 0;
+		this.extendIfNeeds(data_size+10);
 		for (let [k, v] of Object.entries(this.data)) {
 			let val = Uint8Array
 				.from(v
 					.split('')
 					.map(letter => letter.charCodeAt(0)));
-			this.current_code.set(val, this.current_code_cursor++);
+			this.code.set(val, this.cursor++);
 			data_arr.set(val, data_cursor);
 			data_cursor += v.length;
 		}
 		/** MANIFEST */
 		const manifest_length = 12;
 		// version 0+4
-		arr.set(numToUint8Array(4652), 0); 
+		arr.set(numToUint8Array(vm.version), 0); 
 		// code length 4+4
-		arr.set(numToUint8Array(this.current_code_cursor), 4);
+		arr.set(numToUint8Array(this.cursor), 4);
 		// data length
 		arr.set(numToUint8Array(data_size), 8);
 		/** SECTIONS */
 		// code 8+n
-		arr.set(this.current_code.subarray(0, this.current_code_cursor-1), manifest_length);
+		arr.set(this.code.subarray(0, this.cursor-1), manifest_length);
 		// data
-		arr.set(data_arr, this.current_code_cursor+manifest_length)
+		arr.set(data_arr, this.cursor+manifest_length)
 		return arr;
 	}
 };

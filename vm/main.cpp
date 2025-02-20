@@ -1,3 +1,4 @@
+#define MEW_NOTUSE_THROWS
 #include <iostream>
 #include "mewall.h"
 #include "virtual.hpp"
@@ -45,7 +46,8 @@ int main(int argc, char** argv) {
 	// 	hdlls.push(mew::LoadDll(libs.at(i)));
 	// }
 	
-	const char* path = __args.getNextPath();//;
+	const char* path = __args.getNextPath();
+	MewUserAssert(mew::is_exists(path),"path is not exsist");
 	Virtual::VirtualMachine vm;
 	Virtual::Code* code = Virtual::Code_LoadFromFile(path);
 	// vm.hdlls = hdlls;

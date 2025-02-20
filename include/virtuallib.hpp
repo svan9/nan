@@ -370,7 +370,7 @@ namespace Virtual::Lib {
       MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
       auto range = _vars.at(name);
       ((*this) << Instruction_PUSH << Instruction_NUM << num);
-      ((*this) << Instruction_PUSH << Instruction_RMEM << (uint)range.start);
+      ((*this) << Instruction_PUSH << Instruction_REG << (uint)range.start);
       ((*this) << Instruction_ADD  << Instruction_MEM << Instruction_NUM);
     }
 
@@ -395,9 +395,9 @@ namespace Virtual::Lib {
     void Sub(std::string name, uint num) {
       MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
       auto range = _vars.at(name);
-      ((*this) << Instruction_PUSH << Instruction_RMEM << (uint)range.start);
+      ((*this) << Instruction_PUSH << Instruction_REG << (uint)range.start);
       ((*this) << Instruction_PUSH << Instruction_NUM << num);
-      ((*this) << Instruction_SUB  << Instruction_RMEM << Instruction_NUM);
+      ((*this) << Instruction_SUB  << Instruction_REG << Instruction_NUM);
     }
 
     ////////////////////////////////////////////////////////////
@@ -538,7 +538,7 @@ namespace Virtual::Lib {
     void Dec(std::string name) {
       MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
       auto range = _vars.at(name);
-      ((*this) << Instruction_PUSH << Instruction_RMEM << (uint)range.start);
+      ((*this) << Instruction_PUSH << Instruction_REG << (uint)range.start);
       ((*this) << Instruction_DEC  << Instruction_MEM);
     }
 
@@ -563,7 +563,7 @@ namespace Virtual::Lib {
     void Push(std::string varname) {
       MewUserAssert(_vars.find(varname) != _vars.end(), "undefined");
       auto range = _vars.at(varname);
-      ((*this) << Instruction_PUSH << Instruction_RMEM << (uint)range.start);
+      ((*this) << Instruction_PUSH << Instruction_REG << (uint)range.start);
     }
 
     ////////////////////////////////////////////////////////////

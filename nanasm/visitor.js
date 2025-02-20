@@ -14,6 +14,92 @@ export default class VisitorImpl extends Visitor {
 		let vis = this.visitChildren(ctx)?.flat(1)?.[0];
 		return vis;
 	}
+	visitRdi_offset(ctx) {
+		let [,,num,] = ctx.children.map(e=>e.getText())
+		num = parseInt(num);
+		return {
+			"type":"rdi_offset",
+			"value":Math.abs(num)
+		};
+	}
+
+	visitAny_arg(ctx) {
+		let vis = this.visitChildren(ctx)?.filter(e=>e!=void 0)?.[0];
+		let data = ctx.children.map(e=>e.getText())
+		var value, type;
+		// use NUMBER
+		if (vis == void 0) {
+			value = {"value":parseInt(data[0])};
+			type = "number";
+		} else {
+			value = vis;
+			if (value.reg != void 0) {
+				type = "reg";
+			} else {
+				type = value.type;
+			}
+		}
+		return {type, ...value};
+	}
+
+	visitDua_arg(ctx) {
+		let vis = this.visitChildren(ctx)?.filter(e=>e!=void 0);
+		return vis;
+	}
+
+	visitTre_arg(ctx) {
+		let vis = this.visitChildren(ctx)?.filter(e=>e!=void 0);
+		return vis;
+	}
+
+	visitMov(ctx) {
+		let vis = this.visitChildren(ctx)?.filter(e=>e!=void 0)?.[0];
+		this.builder._mov(vis);
+		return {
+			"type":"mov",
+			"value":vis
+		}
+		console.log(vis);
+	}
+
+	visitCall(ctx) {
+		let [,name] = ctx.children.map(e=>e.getText())
+		this.builder._call(name);
+		return {
+			"type": "call",
+			name,
+		};
+	}
+
+	visitPop(ctx) {
+		this.builder._pop();
+		return {"type": "pop"}
+	}
+
+	visitRpop(ctx) {
+		let vis = this.visitChildren(ctx)?.filter(e=>e!=void 0)?.[0];
+		this.builder._rpop(vis);
+		return {"type": "rpop", ...vis}
+	}
+
+	visitRegister(ctx) {
+		let [,reg,] = ctx.children.map(e=>e.getText())
+		let kind, idx;
+		let r = /r(\d)/.exec(reg)?.[1];
+		let rx = /rx(\d)/.exec(reg)?.[1];
+		let dx = /dx(\d)/.exec(reg)?.[1];
+		let fx = /fx(\d)/.exec(reg)?.[1];
+		if (r != void 0) {
+			kind = 1; idx = parseInt(r);
+		} else if (rx != void 0) {
+			kind = 2; idx = parseInt(rx);
+		} else if (dx != void 0) {
+			kind = 3; idx = parseInt(dx);
+		} else if (fx != void 0) {
+			kind = 4; idx = parseInt(fx);
+		} else { return null; } 
+		return {reg, kind, idx};
+	}
 
 	visitData(ctx) {
 		let [,mod,name,value] = ctx.children.map(e=>e.getText())
@@ -54,7 +140,7 @@ export default class VisitorImpl extends Visitor {
 
 	visitPuti(ctx) {
 		let vis = this.visitChildren(ctx)?.filter(e=>e!=void 0)?.[0];
-		if (vis.length == 0) {
+		if (vis?.length == 0) {
 			return null; // todo error
 		}
 		this.builder._puti(vis);
@@ -63,7 +149,7 @@ export default class VisitorImpl extends Visitor {
 
 	visitInc(ctx) {
 		let vis = this.visitChildren(ctx)?.filter(e=>e!=void 0)?.[0]
-		if (vis.length == 0) {
+		if (vis?.length == 0) {
 			return null; // todo error
 		}
 		this.builder._inc(vis);
@@ -114,17 +200,17 @@ export default class VisitorImpl extends Visitor {
 		return {"type":"ret"};
 	}
 
-	visitRdi_offset(ctx) {
-		let [,,num,] = ctx.children.map(e=>e.getText())
-		num = parseInt(num);
-		return Math.abs(num);
-	}
 
 	visitPush(ctx) {
-		let vis = this.visitChildren(ctx)
-		// todo offset push from stack (and c++)
-		// console.log(vis)
+		let vis = this.visitChildren(ctx)?.filter(e=>e!=void 0)?.[0]
 		let [type,value] = ctx.children.map(e=>e.getText())
+		if (vis != void 0) {
+			if (vis.reg != void 0) {
+				this.builder._rpush(vis);
+				return {type, "vtype": "reg", "value":vis};
+			}
+			return {type, value};
+		} 
 		value = parseInt(value);
 		this.builder._push(value);
 		return {type, value};

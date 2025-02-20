@@ -10,6 +10,11 @@
     "value": "Hellow, world\n\u0000"
   },
   {
+    "type": "data",
+    "mod": "da",
+    "name": "space"
+  },
+  {
     "type": "label",
     "name": "__start"
   },
@@ -19,11 +24,11 @@
   },
   {
     "type": "push",
-    "value": 0
+    "value": "0"
   },
   {
     "type": "push",
-    "value": 10
+    "value": "10"
   },
   {
     "type": "label",
@@ -41,7 +46,10 @@
   },
   {
     "type": "inc",
-    "value": 4
+    "value": {
+      "type": "rdi_offset",
+      "value": 0
+    }
   },
   {
     "type": "jmp",
@@ -52,8 +60,23 @@
     "name": "LE1"
   },
   {
+    "type": "mov",
+    "value": [
+      {
+        "type": "reg",
+        "reg": "r1",
+        "kind": 1,
+        "idx": 1
+      },
+      {
+        "type": "number",
+        "value": 10
+      }
+    ]
+  },
+  {
     "type": "push",
-    "value": 0
+    "value": "0"
   },
   {
     "type": "ret"

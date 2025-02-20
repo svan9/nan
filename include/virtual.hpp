@@ -14,7 +14,7 @@
 #include "mewall.h"
 #include "mewmath.hpp"
 #include "dlllib.hpp"
-// #pragma pack(push, 1)
+#pragma pack(push, 1)
 
 // todo 
 // stack offset as argument wheve   
@@ -29,6 +29,7 @@ namespace Virtual {
     Instruction_CALL,
     Instruction_PUSH,
     Instruction_POP,
+    Instruction_RPOP,
 
     Instruction_ADD,
     Instruction_SUB,
@@ -52,8 +53,7 @@ namespace Virtual {
     Instruction_UINT, // arg type | uint
     Instruction_BYTE, // arg type | char
     Instruction_MEM,  // arg type | memory
-    Instruction_RMEM,  // arg type | memory
-    /*depricated*/
+    Instruction_REG,  // arg type | memory
     Instruction_HEAP, // arg type | heap begin
     Instruction_ST,   // arg type | stack top
     
@@ -79,6 +79,7 @@ namespace Virtual {
     Instruction_PUTC,
     Instruction_PUTI,
     Instruction_PUTS,
+    Instruction_GETCH,
     Instruction_MOVRDI,
   };
 
@@ -106,9 +107,14 @@ namespace Virtual {
     CodeManifest* manifest;
     Code* code;
   };
+  
+  struct CodeManifestMarker {
+    bool has_linked_files: 1;
+  };
 
 #pragma region FILE
  
+// stoped development
   void Code_SaveFromFile(const Code& code, const std::filesystem::path& path) {
     std::ofstream file(path, std::ios::out | std::ios::binary);
     MewAssert(file.is_open());
@@ -159,10 +165,11 @@ namespace Virtual {
       MewWarn("file version not support (%i != %i)", file_version, VIRTUAL_VERSION); 
       return nullptr;
     }
-    Code* code = new Code();
     /** MANIFEST */
+    Code* code = new Code();
     code->capacity = mew::readInt4Bytes(file);
     code->data_size = mew::readInt4Bytes(file);
+    // CodeManifestMarker manifest_marker = static_cast<CodeManifestMarker>(mew::readInt4Bytes(file));
     // todo data needs size for [da]
     /* code */
     code->playground = new Instruction[code->capacity];
@@ -174,6 +181,9 @@ namespace Virtual {
     for (int i = 0; i < code->data_size; i++) {
       file >> ((byte*)code->data)[i];
     }
+    // if (manifest_marker.has_linked_files) {
+
+    // }
     file.close();
     return code;
   }
@@ -207,8 +217,22 @@ namespace Virtual {
     None = 0,
     HeapLockExecute = 1 << 1,
   };
+
+  template<size_t size>
+  struct VM_Register {
+    byte data[size];
+  };
+  
+  enum struct VM_RegType: byte {
+    None, R, RX, DX, FX
+  };
+
 #pragma pack(push, 4)
   struct VirtualMachine {
+    VM_Register<4> _r[5];                       // 4*5(20)
+    VM_Register<4> _fx[5];                      // 4*5(20)
+    VM_Register<8> _rx[5];                      // 8*5(40)
+    VM_Register<8> _dx[5];                      // 8*5(40)
     size_t capacity;                            // 8byte
     FILE *r_stream;                             // 8byte
     byte *memory, *heap,
@@ -221,7 +245,7 @@ namespace Virtual {
     } test;                                     // 1byte
     VM_Status status;                           // 1byte
     struct Flags {
-      byte heap_lock_execute = 1;
+      byte heap_lock_execute: 1 = 1;
     } flags;                                    // 1byte
     byte _pad0[1];
     mew::stack<uint, 8U> stack;                 // 24byte
@@ -230,7 +254,26 @@ namespace Virtual {
     mew::stack<mew::_dll_hinstance, 8U> hdlls;  // 24byte
     mew::stack<mew::_dll_farproc, 8U> hprocs;   // 24byte
     mew::stack<FuncInfo, 8U> procs;             // 24byte
-  };                                            // 172byte 
+
+    byte* getRegister(VM_RegType rt, byte idx, size_t* size = nullptr) {
+      MewUserAssert(idx < 5, "undefined register idx");
+      switch (rt) {
+        case VM_RegType::R: 
+          if (!size) {*size = 4;}
+          return this->_r[idx].data;     
+        case VM_RegType::RX: 
+          if (!size) {*size = 8;}
+          return this->_rx[idx].data;
+        case VM_RegType::FX: 
+          if (!size) {*size = 4;}
+          return this->_fx[idx].data;
+        case VM_RegType::DX: 
+          if (!size) {*size = 8;}
+          return this->_dx[idx].data;
+        default: return nullptr;
+      }
+    }
+  };                                            // 300byte 
 #pragma pack(pop)
   void a() {
     sizeof(VirtualMachine);
@@ -300,7 +343,7 @@ namespace Virtual {
         uint x; memcpy(&x, pointer, sizeof(x));
         vm.stack.push(x, vm.rdi);
       } break;
-      case Instruction_RMEM: {
+      case Instruction_REG: {
         MewUserAssert(vm.heap+number < vm.end, "out of memory");
         vm.stack.push(number, vm.rdi);
       } break;
@@ -310,6 +353,12 @@ namespace Virtual {
       } break;
       default: MewNot(); break;
     }
+  }
+
+  byte* VM_GetReg(VirtualMachine& vm, size_t* size = nullptr) {
+    byte rtype = *vm.begin++;
+    byte ridx = *vm.begin++;
+    return vm.getRegister((Virtual::VM_RegType)rtype, ridx);
   }
 
   void VM_Push(VirtualMachine& vm) {
@@ -332,12 +381,14 @@ namespace Virtual {
         vm.stack.push(x, vm.rdi);
         vm.begin += sizeof(number);
       } break;
-      case Instruction_RMEM: {
-        uint number = 0;
-        memcpy(&number, vm.begin, sizeof(number));
-        MewUserAssert(vm.heap+number < vm.end, "out of memory");
-        vm.stack.push(number, vm.rdi);
-        vm.begin += sizeof(number);
+      case Instruction_REG: {
+        size_t size;
+        byte* reg = VM_GetReg(vm, &size);
+        MewUserAssert(reg != nullptr, "invalid register");
+        vm.stack.push((uint)*reg, vm.rdi);
+        if (size == 8) {
+          vm.stack.push((uint)*(reg+sizeof(uint)), vm.rdi);
+        }
       } break;
       case Instruction_ST: {
         int number = 0;
@@ -353,6 +404,20 @@ namespace Virtual {
   void VM_Pop(VirtualMachine& vm) {
     MewAssert(!vm.stack.empty());
     vm.stack.pop();
+  }
+
+  void VM_RPop(VirtualMachine& vm) {
+    MewAssert(!vm.stack.empty());
+    size_t size;
+    byte* reg = VM_GetReg(vm, &size);
+    if (size == 4) {
+      uint value = vm.stack.pop();
+      memcpy(reg, &value, sizeof(uint));
+    } else
+    if (size == 8) {
+      long long value = vm.stack.npop<long long>();
+      memcpy(reg, &value, sizeof(value));
+    }
   }
   
   void VM_StackTop(VirtualMachine& vm, byte type, uint* x, byte** mem = nullptr) {
@@ -383,18 +448,17 @@ namespace Virtual {
     // }
   }
 
+  void VM_ManualCall(VirtualMachine& vm, int offset) {
+    MewUserAssert(MEW_IN_RANGE(vm.memory, vm.end, vm.begin+offset), 
+      "out of memory");
+    vm.begin_stack.push(vm.begin);
+    vm.begin += offset;
+  }
+
   void VM_Call(VirtualMachine& vm) {
-    uint number = 0;
-    memcpy(&number, vm.begin, sizeof(number));
-    vm.begin += sizeof(number);
-    MewUserAssert(vm.procs.has(number), "proc not found");
-    FuncInfo& info = vm.procs.at((int)number);
-    uint offset = info.calloffset;
-    MewUserAssert(vm.heap+offset < vm.end, "out of memory");
-    byte* pointer = vm.heap+offset;
-    byte typeofret = *vm.begin++;
-    int _ret = (vm.hprocs.at((int)info.idx))();
-    VM_Push(vm, typeofret, (uint)(_ret));
+    int offset; 
+    memcpy(&offset, vm.begin, sizeof(int));
+    VM_ManualCall(vm, offset);
   }
 
   void VM_MathBase(VirtualMachine& vm, uint* x, uint* y, byte** mem = nullptr) {
@@ -411,12 +475,255 @@ namespace Virtual {
     memcpy(&offset, vm.begin, sizeof(int)); vm.begin += sizeof(int);
     return offset/4;
   }
-  
-  int& VM_GetAtStack(VirtualMachine& vm) {
-    int offset;
-    memcpy(&offset, vm.begin, sizeof(int)); vm.begin += sizeof(int);
-    return (int&)vm.stack.at(-(offset/4));
+
+#pragma region VM_ARG 
+  typedef struct {
+    VM_RegType type;
+    byte idx;
+  } VM_REG_INFO;
+
+  class VM_ARG {
+  public:
+    VM_ARG() {}
+    byte* data;
+    byte* data2;
+
+    byte type;
+    int& getInt() {
+      return (int&)(*this->data);
+    }
+    lli& getLong() {
+      return (lli&)(*this->data);
+    }
+    float& getFloat() {
+      return (float&)(*this->data);
+    }
+    double& getDouble() {
+      return (double&)(*this->data);
+    }
+    byte getByte() {
+      return (byte)(*this->data);
+    }
+
+    static void do_math(VM_ARG& a, mew::asgio fn, bool depr_float = false) { 
+      switch (a.type) {
+        case Instruction_ST: mew::gen_asgio(fn, a.getInt()); break;
+        case Instruction_REG: {
+          VM_REG_INFO* ri = (VM_REG_INFO*)a.data2;
+          switch (ri->type) {
+            case VM_RegType::R: mew::gen_asgio(fn, a.getInt()); break;
+            case VM_RegType::RX: mew::gen_asgio(fn, a.getLong()); break;
+            case VM_RegType::FX: if (!depr_float) mew::gen_asgio(fn, a.getFloat()); break;
+            case VM_RegType::DX: if (!depr_float) mew::gen_asgio(fn, a.getDouble()); break;
+            default: MewUserAssert(false, "undefined reg type");
+          }
+          break;
+        }
+        default: MewUserAssert(false, "undefined arg type");
+      } 
+    }
+
+    static void do_math(VM_ARG& a, VM_ARG& b, mew::adgio fn, bool depr_float = false) {
+      switch (a.type) {
+        case Instruction_ST: {
+          switch (b.type) {
+            case Instruction_ST: mew::gen_adgio(fn, a.getInt(), b.getInt()); break;
+            case Instruction_REG: {
+              VM_REG_INFO* ri = (VM_REG_INFO*)a.data2;
+              switch (ri->type) {
+                case VM_RegType::R: mew::gen_adgio(fn, a.getInt(), b.getInt()); break;
+                case VM_RegType::RX: mew::gen_adgio(fn, a.getInt(), b.getLong()); break;
+                case VM_RegType::FX: if (!depr_float) mew::gen_adgio(fn, a.getInt(), b.getFloat()); break;
+                case VM_RegType::DX: if (!depr_float) mew::gen_adgio(fn, a.getInt(), b.getDouble()); break;
+                default: MewUserAssert(false, "undefined reg type");
+              }
+            } break;
+            case Instruction_NUM: {
+              mew::gen_adgio(fn, a.getInt(), b.getInt());
+            } break;
+          }
+        } break;
+        case Instruction_REG: {
+          VM_REG_INFO* ri = (VM_REG_INFO*)a.data2;
+          switch (ri->type) {
+            case VM_RegType::R: { 
+              switch (b.type) {
+                case Instruction_ST: mew::gen_adgio(fn, a.getInt(), b.getInt()); break;
+                case Instruction_REG: {
+                  VM_REG_INFO* ri = (VM_REG_INFO*)a.data2;
+                  switch (ri->type) {
+                    case VM_RegType::R: mew::gen_adgio(fn, a.getInt(), b.getInt()); break;
+                    case VM_RegType::RX: mew::gen_adgio(fn, a.getInt(), b.getLong()); break;
+                    case VM_RegType::FX: if (!depr_float) mew::gen_adgio(fn, a.getInt(), b.getFloat()); break;
+                    case VM_RegType::DX: if (!depr_float) mew::gen_adgio(fn, a.getInt(), b.getDouble()); break;
+                    default: MewUserAssert(false, "undefined reg type");
+                  }
+                } break;
+                case Instruction_NUM: {
+                  mew::gen_adgio(fn, a.getInt(), b.getInt());
+                } break;
+              }
+            } break;
+            case VM_RegType::RX: { 
+              switch (b.type) {
+                case Instruction_ST: mew::gen_adgio(fn, a.getLong(), b.getInt()); break;
+                case Instruction_REG: {
+                  VM_REG_INFO* ri = (VM_REG_INFO*)a.data2;
+                  switch (ri->type) {
+                    case VM_RegType::R: mew::gen_adgio(fn, a.getLong(), b.getInt()); break;
+                    case VM_RegType::RX: mew::gen_adgio(fn, a.getLong(), b.getLong()); break;
+                    case VM_RegType::FX: if (!depr_float) mew::gen_adgio(fn, a.getLong(), b.getFloat()); break;
+                    case VM_RegType::DX: if (!depr_float) mew::gen_adgio(fn, a.getLong(), b.getDouble()); break;
+                    default: MewUserAssert(false, "undefined reg type");
+                  }
+                } break;
+                case Instruction_NUM: {
+                  mew::gen_adgio(fn, a.getLong(), b.getInt());
+                } break;
+              }
+            } break;
+            case VM_RegType::FX: { 
+              if (depr_float) break;
+              switch (b.type) {
+                case Instruction_ST: mew::gen_adgio(fn, a.getFloat(), b.getInt()); break;
+                case Instruction_REG: {
+                  VM_REG_INFO* ri = (VM_REG_INFO*)a.data2;
+                  switch (ri->type) {
+                    case VM_RegType::R: mew::gen_adgio(fn, a.getFloat(), b.getInt()); break;
+                    case VM_RegType::RX: mew::gen_adgio(fn, a.getFloat(), b.getLong()); break;
+                    case VM_RegType::FX: mew::gen_adgio(fn, a.getFloat(), b.getFloat()); break;
+                    case VM_RegType::DX: mew::gen_adgio(fn, a.getFloat(), b.getDouble()); break;
+                    default: MewUserAssert(false, "undefined reg type");
+                  }
+                } break;
+                case Instruction_NUM: {
+                  mew::gen_adgio(fn, a.getFloat(), b.getInt());
+                } break;
+              }
+            } break;
+            case VM_RegType::DX: { 
+              if (depr_float) break;
+              switch (b.type) {
+                case Instruction_ST: mew::gen_adgio(fn, a.getDouble(), b.getInt()); break;
+                case Instruction_REG: {
+                  VM_REG_INFO* ri = (VM_REG_INFO*)a.data2;
+                  switch (ri->type) {
+                    case VM_RegType::R: mew::gen_adgio(fn, a.getDouble(), b.getInt()); break;
+                    case VM_RegType::RX: mew::gen_adgio(fn, a.getDouble(), b.getLong()); break;
+                    case VM_RegType::FX: mew::gen_adgio(fn, a.getDouble(), b.getFloat()); break;
+                    case VM_RegType::DX: mew::gen_adgio(fn, a.getDouble(), b.getDouble()); break;
+                    default: MewUserAssert(false, "undefined reg type");
+                  }
+                } break;
+                case Instruction_NUM: {
+                  mew::gen_adgio(fn, a.getDouble(), b.getInt());
+                } break;
+              }
+            } break;
+            default: MewUserAssert(false, "undefined reg type");
+          }
+        } break;
+        default: MewUserAssert(false, "undefined arg type");
+      } 
+    }
+
+    VM_ARG& operator++() {
+      do_math(*this, mew::aginc);
+      return *this;
+    }
+
+    VM_ARG& operator--() {
+      do_math(*this, mew::agdec);
+      return *this;
+    }
+
+    static void mov(VM_ARG& a, VM_ARG& b) {
+      do_math(a, b, mew::agmov);
+    }
+    static void swap(VM_ARG& a, VM_ARG& b) {
+      do_math(a, b, mew::agswap);
+    }
+  };
+
+  VM_ARG& operator+(VM_ARG& a, VM_ARG& b) {
+    VM_ARG::do_math(a, b, mew::agadd);
+    return a;
   }
+  VM_ARG& operator-(VM_ARG& a, VM_ARG& b) {
+    VM_ARG::do_math(a, b, mew::agsub);
+    return a;
+  }
+  VM_ARG& operator/(VM_ARG& a, VM_ARG& b) {
+    VM_ARG::do_math(a, b, mew::agdiv);
+    return a;
+  }
+  VM_ARG& operator*(VM_ARG& a, VM_ARG& b) {
+    VM_ARG::do_math(a, b, mew::agmul);
+    return a;
+  }
+  VM_ARG& operator>>(VM_ARG& a, VM_ARG& b) {
+    VM_ARG::do_math(a, b, mew::agrs, true);
+    return a;
+  }
+  VM_ARG& operator<<(VM_ARG& a, VM_ARG& b) {
+    VM_ARG::do_math(a, b, mew::agls, true);
+    return a;
+  }
+  VM_ARG& operator^(VM_ARG& a, VM_ARG& b) {
+    VM_ARG::do_math(a, b, mew::agxor, true);
+    return a;
+  }
+  VM_ARG& operator~(VM_ARG& a) {
+    VM_ARG::do_math(a, mew::agnot, true);
+    return a;
+  }
+  VM_ARG& operator|(VM_ARG& a, VM_ARG& b) {
+    VM_ARG::do_math(a, b, mew::agor, true);
+    return a;
+  }
+  VM_ARG& operator&(VM_ARG& a, VM_ARG& b) {
+    VM_ARG::do_math(a, b, mew::agand, true);
+    return a;
+  }
+
+  VM_ARG VM_GetArg(VirtualMachine& vm) {
+    byte type = *vm.begin++;
+    switch (type) {
+      case Instruction_ST: {
+        int offset;
+        memcpy(&offset, vm.begin, sizeof(int)); vm.begin += sizeof(int);
+        VM_ARG arg;
+        arg.data = vm.stack.rat(-offset);
+        arg.type = type;
+        return arg;
+      };
+      case Instruction_REG: {
+        byte rtype = *vm.begin++;
+        byte ridx = *vm.begin++;
+        size_t size;
+        VM_ARG arg;
+        arg.data = vm.getRegister((VM_RegType)rtype, ridx, &size);
+        VM_REG_INFO* ri = new VM_REG_INFO();
+        ri->idx = ridx;
+        ri->type = (VM_RegType)rtype;
+        arg.data2 = (byte*)ri;
+        arg.type = type;
+        return arg;
+      }
+      case Instruction_NUM: {
+        int num;
+        memcpy(&num, vm.begin, sizeof(int)); vm.begin += sizeof(int);
+        VM_ARG arg;
+        arg.data = (byte*)num;
+        arg.type = type;
+        return arg;
+      }
+    
+      default: MewUserAssert(false, "undefined arg type");
+    }
+  }
+
+#pragma endregion VM_ARG
 
   void VM_MovRDI(VirtualMachine& vm) {
     int offset = VM_GetOffset(vm);
@@ -424,71 +731,71 @@ namespace Virtual {
   }
 
   void VM_Add(VirtualMachine& vm) {
-    int& a = VM_GetAtStack(vm);
-    int& b = VM_GetAtStack(vm);
-    a += b;
+    auto a = VM_GetArg(vm);
+    auto b = VM_GetArg(vm);
+    a + b;
   }
 
   void VM_Sub(VirtualMachine& vm) {
-    int& a = VM_GetAtStack(vm);
-    int& b = VM_GetAtStack(vm);
-    a -= b;
+    auto a = VM_GetArg(vm);
+    auto b = VM_GetArg(vm);
+    a - b;
   }
   
   void VM_Mul(VirtualMachine& vm) {
-    int& a = VM_GetAtStack(vm);
-    int& b = VM_GetAtStack(vm);
-    a *= b;
+    auto a = VM_GetArg(vm);
+    auto b = VM_GetArg(vm);
+    a * b;
   }
   void VM_Div(VirtualMachine& vm) {
-    int& a = VM_GetAtStack(vm);
-    int& b = VM_GetAtStack(vm);
-    a /= b;
+    auto a = VM_GetArg(vm);
+    auto b = VM_GetArg(vm);
+    a / b;
   }
   
   void VM_Inc(VirtualMachine& vm) {
-    int offset = VM_GetOffset(vm);
-    ++(vm.stack.at(-(offset)-1));
+    auto a = VM_GetArg(vm);
+    ++a;
   }
 
   void VM_Dec(VirtualMachine& vm) {
-    int offset = VM_GetOffset(vm);
-    --(vm.stack.at(-(offset)-1));
+    auto a = VM_GetArg(vm);
+    --a;
   }
 
   void VM_Xor(VirtualMachine& vm) {
-    int& a = VM_GetAtStack(vm);
-    int& b = VM_GetAtStack(vm);
-    a ^= b;
+    auto a = VM_GetArg(vm);
+    auto b = VM_GetArg(vm);
+    a ^ b;
   }
 
   void VM_Or(VirtualMachine& vm) {
-    int& a = VM_GetAtStack(vm);
-    int& b = VM_GetAtStack(vm);
-    a |= b;
+    auto a = VM_GetArg(vm);
+    auto b = VM_GetArg(vm);
+    a | b;
   }
 
   void VM_Not(VirtualMachine& vm) {
-    int& a = VM_GetAtStack(vm);
-    a = ~a;
+    auto a = VM_GetArg(vm);
+    ~a;
   }
   
   void VM_And(VirtualMachine& vm) {
-    int& a = VM_GetAtStack(vm);
-    int& b = VM_GetAtStack(vm);
-    a &= b;
+    auto a = VM_GetArg(vm);
+    auto b = VM_GetArg(vm);
+    a & b;
   }
 
   void VM_LS(VirtualMachine& vm) {
-    int& a = VM_GetAtStack(vm);
-    int& b = VM_GetAtStack(vm);
-    a <<= b;
+    auto a = VM_GetArg(vm);
+    auto b = VM_GetArg(vm);
+    a << b;
   }
 
   void VM_RS(VirtualMachine& vm) {
-    int& a = VM_GetAtStack(vm);
-    int& b = VM_GetAtStack(vm);
-    a >>= b;
+    auto a = VM_GetArg(vm);
+    auto b = VM_GetArg(vm);
+    a >> b;
   }
   
   void VM_ManualJmp(VirtualMachine& vm, int offset) {
@@ -497,6 +804,7 @@ namespace Virtual {
     // vm.begin_stack.push(vm.begin);
     vm.begin += offset;
   }
+
   
   void VM_Jmp(VirtualMachine& vm) {
     int offset;
@@ -586,17 +894,15 @@ namespace Virtual {
   }
 
   void VM_Mov(VirtualMachine& vm) {
-    int& a = VM_GetAtStack(vm);
-    int& b = VM_GetAtStack(vm);
-    a = b;
+    auto a = VM_GetArg(vm);
+    auto b = VM_GetArg(vm);
+    VM_ARG::mov(a, b);
   }
 
   void VM_Swap(VirtualMachine& vm) {
-    int& a = VM_GetAtStack(vm);
-    int& b = VM_GetAtStack(vm);
-    int c = a;
-    a = b;
-    b = c;
+    auto a = VM_GetArg(vm);
+    auto b = VM_GetArg(vm);
+    VM_ARG::swap(a, b);
   }
 
   void VM_MSet(VirtualMachine& vm) {
@@ -640,6 +946,11 @@ namespace Virtual {
     }
   }
 
+  void VM_Getch(VirtualMachine& vm) {
+    int& a = VM_GetArg(vm).getInt();
+    a = mew::wait_char();
+  }
+
   void VM_Open(VirtualMachine& vm) {
     uint offset;
     memcpy(&offset, vm.begin, sizeof(uint)); vm.begin+=sizeof(uint);
@@ -669,7 +980,7 @@ namespace Virtual {
     memcpy(&offset, vm.begin, sizeof(uint)); vm.begin+=sizeof(uint);
     MewUserAssert(vm.heap+offset < vm.end, "out of memory");
     byte* pointer = vm.heap+offset;
-    fputws((wchar_t*)pointer, vm.r_stream);
+    fputs((char*)pointer, vm.r_stream);
   }
   
   void VM_Read(VirtualMachine& vm) {
@@ -680,8 +991,9 @@ namespace Virtual {
     short int chunk_size;
     memcpy(&chunk_size, vm.begin, sizeof(chunk_size)); vm.begin+=sizeof(chunk_size);
     MewUserAssert(vm.heap+offset+(chunk_size*2) < vm.end, "out of memory (chunk too big)");
-    fgetws((wchar_t*)pointer, chunk_size, vm.r_stream);
+    fgets((char*)pointer, chunk_size, vm.r_stream);
   }
+  
 
   void RunLine(VirtualMachine& vm) {
     byte head_byte = *vm.begin++;
@@ -696,6 +1008,9 @@ namespace Virtual {
       } break;
       case Instruction_POP: {
         VM_Pop(vm);
+      } break;
+      case Instruction_RPOP: {
+        VM_RPop(vm);
       } break;
       case Instruction_ADD: {
         VM_Add(vm);
@@ -774,6 +1089,9 @@ namespace Virtual {
       } break;
       case Instruction_PUTS: {
         VM_Puts(vm);
+      } break;
+      case Instruction_GETCH: {
+        VM_Getch(vm);
       } break;
       case Instruction_MOVRDI: {
         VM_MovRDI(vm);
@@ -1022,7 +1340,7 @@ namespace Virtual {
     }
     
   };
-// #pragma pack(pop)
+#pragma pack(pop)
 }
 namespace Tests {
   bool test_Virtual() {

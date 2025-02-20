@@ -1,0 +1,5 @@
+# registers
+[float	: 4b]	fx1 fx2 fx3 fx4 fx5
+[double	: 8b]	dx1 dx2 dx3 dx4 dx5
+[int		: 4b]	r1 	r2 	r3 	r4 	r5
+[int		: 8b]	rx1 rx2 rx3 rx4 rx5

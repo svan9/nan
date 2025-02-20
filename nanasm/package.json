@@ -7,11 +7,16 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon index.js -e js"
   },
+  "bin": {
+    "nsm": "/bin/cli.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "antlr4": "^4.13.2"
+    "antlr4": "^4.13.2",
+    "colors": "^1.4.0",
+    "minimist": "^1.2.8"
   }
 }
