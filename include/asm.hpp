@@ -5,6 +5,8 @@
 #include "virtual.hpp"
 #include <iostream>
 #include <unordered_map>
+#include <initializer_list>
+#include "virtuallib.hpp"
 
 namespace Virtual::Asm {
 	using namespace mew::utils;
@@ -12,7 +14,7 @@ namespace Virtual::Asm {
 	enum struct TokenType: int {
 		// simple type
 		Undefined,
-		None, String, Number, Text,	Colon, RdiOffset, Label,
+		None, String, Number, Text,	Colon,  Label,
 		Data, DB, DA, Entry,
 		// operators
 		Minus, Plus, Equal, Multiply, Divide,
@@ -24,12 +26,13 @@ namespace Virtual::Asm {
 		dx2, dx3, dx4, dx5, r1,
 		r2, r3, r4, r5, rx1,
 		rx2, rx3, rx4, rx5,
+		Rdi,
 		// commands
 		Call, Push, Pop, Rpop, Add, Sub, Mul, Div, Inc, Dec, Xor, Or, 
 		Not, And, Ls, Rs, Jmp, Ret, Exit, Test, Je, Jel, Jem, Jne, Jl,
 		Jm, Mov, Swap, Mset, Swst, Write, Read, Open, Putc, Puti, Puts, 
 		Getch, Movrdi,
-		
+		RdiOffset, DataSize,
 	};
 
 	const char* stringify_tokentype(TokenType type) {
@@ -113,6 +116,7 @@ namespace Virtual::Asm {
 			case TokenType::Puts: return "Puts";
 			case TokenType::Getch: return "Getch";
 			case TokenType::Movrdi: return "Movrdi";
+			case TokenType::DataSize: return "DataSize";
 			default: return nullptr;
 		}
 	}
@@ -190,6 +194,7 @@ namespace Virtual::Asm {
 			{ "puts", TokenType::Puts},
 			{ "getch", TokenType::Getch},
 			{ "movrdi", TokenType::Movrdi},
+			// { "rdi", TokenType::Rdi},
 	};
 
 	struct Token {
@@ -201,7 +206,7 @@ namespace Virtual::Asm {
 			if (str == nullptr) {
 				printf("{BREAKEN TYPE}");
 			} else 
-			if (type == TokenType::Number) {
+			if (type == TokenType::Number || type == TokenType::RdiOffset || type == TokenType::DataSize) {
 				printf("{%s, %i} -- ", str, (int)value);
 			} else
 			if (value != nullptr) printf("{%s, '%s'} -- ", str, value);
@@ -209,8 +214,6 @@ namespace Virtual::Asm {
 		}
 	};
 	
-	// lexer & parser in single face
-	// cause its just asm
 	struct Lexer {
 		mew::stack<mew::stack<Token>> token_row;
 		mew::stack<const char*> lines;
@@ -242,7 +245,7 @@ namespace Virtual::Asm {
 			}
 		}
 
-		void _watch_token(Token& tk, mew::stack<Token> &line, size_t idx) {
+		void _watch_token(Token& tk) {
 			if (getLastChar(tk.value) == ':') {
 				tk.type = TokenType::Label;
 				tk.value = strtrim(tk.value, strlen(tk.value)-1);
@@ -265,6 +268,7 @@ namespace Virtual::Asm {
 				todo parse & separate grammars in Token.value 
 				& insert in place of current
 			*/
+			
 			tk.type = TokenType::Text;
 		}
 
@@ -274,7 +278,7 @@ namespace Virtual::Asm {
 				for (int y = 0; y < line.size(); ++y) {
 					auto& e = line[y];
 					if (e.type == TokenType::Undefined) {
-						_watch_token(e, line, y);
+						_watch_token(e);
 					}
 				}
 			}
@@ -282,12 +286,8 @@ namespace Virtual::Asm {
 
 		Lexer(const char* str) {
 			lines = *splitLines(str);
-			// for (int i = 0; i < lines.size(); ++i) {
-			// 	printf("[%s] ", lines[i]);
-			// }
-			// row.config(str);
-			// row.print();
 			_fill_simple();
+			// print();
 			_decrypt_undefined();
 		}
 
@@ -304,12 +304,70 @@ namespace Virtual::Asm {
 		}
 	};
 
+	struct Parser {
+		Lexer& lexer;
+
+		Parser(Lexer& lexer): lexer(lexer) {parse();}
+
+		bool same_type_sequence(mew::stack<Token>& row, size_t start, std::initializer_list<TokenType> types) {
+			if (row.size()-start > types.size()) return false;
+			auto begin = types.begin();
+			for (int i = 0; i < types.size(); ++i) {
+				auto tkt = begin[i];
+				if (row[start+i].type != tkt) return false; 
+			}
+			return true;
+		}
+
+		void parse() {
+			for (int x = 0; x < lexer.token_row.size(); ++x) {
+				auto& line = lexer.token_row[x];
+				// printf("[ ");
+				for (int y = 0; y < line.size(); ++y) {
+					auto& tk = line[y];
+					bool is_rdioffset = same_type_sequence(line, y, {
+						TokenType::RoundOpenBracket, TokenType::Text, TokenType::Minus, TokenType::Number, TokenType::RoundCloseBracket
+					}) && mew::strcmp(line[y+1].value, "rdi");
+					bool is_datasize = same_type_sequence(line, y, {
+						TokenType::SquareOpenBracket, TokenType::Number, TokenType::SquareCloseBracket
+					});
+					if (is_rdioffset) {
+						tk.type = TokenType::RdiOffset;
+						tk.value = line[y+3].value;
+						line.erase(y+1, 4);
+					} else if (is_datasize) {
+						tk.type = TokenType::DataSize;
+						tk.value = line[y+1].value;
+						line.erase(y+1, 2);
+					}
+					// line[y].print();
+				}
+				// printf(" ]\n");
+				
+			}
+		}
+	};
+
+	using namespace ::Virtual::Lib;
 	struct Compiler {
 		/*
 			todo for Compiler
 			[ ] store labels in code for nexts calling 
-			[ ] ... 
+			[ ] others
+			[ ] (::Virtual) save Code to file
 		*/
+		Lexer& lexer;
+		std::unordered_map<const char*, size_t> labels;
+		size_t entry = 0;
+		Builder builder;
+
+		Compiler(Lexer& lexer): lexer(lexer) {
+			compile();
+		}
+
+		void compile() {
+			// builder.MarkLabel();
+		}
 	};
 
 
@@ -335,6 +393,7 @@ namespace Virtual::Asm {
 			"	push 0\n"
 			"	ret\n";
 			Lexer lex(str);
+			Parser par(lex);
 			lex.print();
 		}
 	};

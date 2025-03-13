@@ -299,6 +299,11 @@ namespace Virtual::Lib {
     void ExternFunction(std::string name, VM_Processor proc) {
       _externs_functions.insert({name, proc});
     }
+    
+    ////////////////////////////////////////////////////////////
+    void MarkLabel(const char* name) {
+      _functions.insert({name, Cursor()});
+    }
 
     ////////////////////////////////////////////////////////////
     void BeginFunction(std::string name) {
@@ -500,30 +505,30 @@ namespace Virtual::Lib {
       Test(Instruction_MEM, Instruction_NUM);
     }
 
-    ////////////////////////////////////////////////////////////
-    void BeginForI(std::string i_name, int i_init_val, int count_of_iter) {
-      /* 'int i = 0' */
-      /* reserve variable 'i' */
-      Assign(i_name, sizeof(int), true, i_init_val);
-      /* mark back jump dest */
-      BeginBackJump();
-      /* 'i < x' */
-      Test(i_name, count_of_iter-1);
-      ((*this) << Instruction_JM << 0U);
-      BeginDefer();
-      /* 'i' */
-      Inc(i_name);
-    }
+    // ////////////////////////////////////////////////////////////
+    // void BeginForI(std::string i_name, int i_init_val, int count_of_iter) {
+    //   /* 'int i = 0' */
+    //   /* reserve variable 'i' */
+    //   Assign(i_name, sizeof(int), true, i_init_val);
+    //   /* mark back jump dest */
+    //   BeginBackJump();
+    //   /* 'i < x' */
+    //   Test(i_name, count_of_iter-1);
+    //   ((*this) << Instruction_JM << 0U);
+    //   BeginDefer();
+    //   /* 'i' */
+    //   Inc(i_name);
+    // }
 
-    ////////////////////////////////////////////////////////////
-    void EndForI(std::string i_name) {
-      /* repeat 'for' */
-      EndBackJump();
-      /* confirm last defer */
-      EndDefer();
-      /* free 'i' */
-      Destroy(i_name);
-    }
+    // ////////////////////////////////////////////////////////////
+    // void EndForI(std::string i_name) {
+    //   /* repeat 'for' */
+    //   EndBackJump();
+    //   /* confirm last defer */
+    //   EndDefer();
+    //   /* free 'i' */
+    //   Destroy(i_name);
+    // }
 
     ////////////////////////////////////////////////////////////
     void Inc(int offset) {
@@ -784,27 +789,27 @@ namespace Virtual::Lib {
 }
 
 namespace Tests {
-  bool test_Virtual_Lib() {
-    try {
-      using namespace Virtual;
-      using namespace Virtual::Lib;
-      Builder b;
-      b.BeginFunction("main");
-      /* TEST 'for' */
-      b.BeginFunction("l1");
-      /* 'for (int i = 0; i < 10; i)' */
-      b.BeginForI("i", 0, 10);
-      /*{*/
-      /* */ b.Puti();
-      /*}*/
-      b.EndForI("i");
-      b.Save("./vlib-for-10.nb");
-      b.Run();
-    } catch (std::exception e) {
-      MewPrintError(e);
-      return false;
-    }
-    return true;
-  }
+  // bool test_Virtual_Lib() {
+  //   try {
+  //     using namespace Virtual;
+  //     using namespace Virtual::Lib;
+  //     Builder b;
+  //     b.BeginFunction("main");
+  //     /* TEST 'for' */
+  //     b.BeginFunction("l1");
+  //     /* 'for (int i = 0; i < 10; i)' */
+  //     b.BeginForI("i", 0, 10);
+  //     /*{*/
+  //     /* */ b.Puti();
+  //     /*}*/
+  //     b.EndForI("i");
+  //     b.Save("./vlib-for-10.nb");
+  //     b.Run();
+  //   } catch (std::exception e) {
+  //     MewPrintError(e);
+  //     return false;
+  //   }
+  //   return true;
+  // }
 }
 #endif
