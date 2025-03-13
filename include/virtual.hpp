@@ -95,12 +95,30 @@ namespace Virtual {
     // std::map<const char*, FuncInfo> procs;
   };
 
+  struct VM_MANIFEST_FLAGS {
+    // bool __empty_byte: 1;
+    bool has_debug: 1 = false;
+  };
+
+  struct CodeDebugInfo {
+    uint line;
+    // const char* src;
+    uint cursor;
+  };
+
+  struct CodeManifestExtended {
+    VM_MANIFEST_FLAGS flags;
+    size_t size;
+    mew::stack<CodeDebugInfo> debug;
+  };
+
   struct Code {
     size_t capacity;
     Instruction* playground;
     size_t data_size = 0;
     byte* data = nullptr;
     mew::stack<FuncInfo, 8U> procs;
+    CodeManifestExtended cme;
   };
 
   struct CodeExtended {
@@ -113,7 +131,8 @@ namespace Virtual {
   };
 
 #pragma region FILE
- 
+
+
 // stoped development
   void Code_SaveFromFile(const Code& code, const std::filesystem::path& path) {
     std::ofstream file(path, std::ios::out | std::ios::binary);
@@ -167,10 +186,10 @@ namespace Virtual {
     }
     /** MANIFEST */
     Code* code = new Code();
+    VM_MANIFEST_FLAGS mflags = (VM_MANIFEST_FLAGS)mew::readInt4Bytes(file);
     code->capacity = mew::readInt4Bytes(file);
     code->data_size = mew::readInt4Bytes(file);
-    // CodeManifestMarker manifest_marker = static_cast<CodeManifestMarker>(mew::readInt4Bytes(file));
-    // todo data needs size for [da]
+    code->cme.flags = mflags;
     /* code */
     code->playground = new Instruction[code->capacity];
     for (int i = 0; i < code->capacity; i++) {
@@ -181,9 +200,13 @@ namespace Virtual {
     for (int i = 0; i < code->data_size; i++) {
       file >> ((byte*)code->data)[i];
     }
-    // if (manifest_marker.has_linked_files) {
-
-    // }
+    if (mflags.has_debug) {
+      code->cme.size = mew::readInt4Bytes(file); 
+      for (int i = 0; i < code->cme.size; i++) {
+        CodeDebugInfo di; mew::readBytes(file, di);
+        code->cme.debug.push(di);
+      }
+    }
     file.close();
     return code;
   }
@@ -200,6 +223,7 @@ namespace Virtual {
     VM_Status_Panding = 0,
     VM_Status_Execute = 1 << 1,
     VM_Status_Ret     = 1 << 2,
+    VM_Status_Error   = 1 << 3,
   };
   
   enum VM_TestStatus: byte {
@@ -228,7 +252,15 @@ namespace Virtual {
   };
 
 #pragma pack(push, 4)
+  struct VM_DEBUG {
+    byte last_head_byte = 0;
+    char* last_fn = 0;
+  };
   struct VirtualMachine {
+    FILE* std_in = stdin;
+    FILE* std_out = stdout;
+    Code* src;
+    VM_DEBUG debug;
     VM_Register<4> _r[5];                       // 4*5(20)
     VM_Register<4> _fx[5];                      // 4*5(20)
     VM_Register<8> _rx[5];                      // 8*5(40)
@@ -246,6 +278,7 @@ namespace Virtual {
     VM_Status status;                           // 1byte
     struct Flags {
       byte heap_lock_execute: 1 = 1;
+      byte use_debug: 1 = 0;
     } flags;                                    // 1byte
     byte _pad0[1];
     mew::stack<uint, 8U> stack;                 // 24byte
@@ -254,6 +287,7 @@ namespace Virtual {
     mew::stack<mew::_dll_hinstance, 8U> hdlls;  // 24byte
     mew::stack<mew::_dll_farproc, 8U> hprocs;   // 24byte
     mew::stack<FuncInfo, 8U> procs;             // 24byte
+    size_t process_cycle = 0;
 
     byte* getRegister(VM_RegType rt, byte idx, size_t* size = nullptr) {
       MewUserAssert(idx < 5, "undefined register idx");
@@ -362,6 +396,7 @@ namespace Virtual {
   }
 
   void VM_Push(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     byte head_byte = *vm.begin++;
     switch (head_byte) {
       case 0:
@@ -402,11 +437,13 @@ namespace Virtual {
   }
   
   void VM_Pop(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     MewAssert(!vm.stack.empty());
     vm.stack.pop();
   }
 
   void VM_RPop(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     MewAssert(!vm.stack.empty());
     size_t size;
     byte* reg = VM_GetReg(vm, &size);
@@ -731,68 +768,80 @@ namespace Virtual {
   }
 
   void VM_Add(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     auto a = VM_GetArg(vm);
     auto b = VM_GetArg(vm);
     a + b;
   }
 
   void VM_Sub(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     auto a = VM_GetArg(vm);
     auto b = VM_GetArg(vm);
     a - b;
   }
   
   void VM_Mul(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     auto a = VM_GetArg(vm);
     auto b = VM_GetArg(vm);
     a * b;
   }
   void VM_Div(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     auto a = VM_GetArg(vm);
     auto b = VM_GetArg(vm);
     a / b;
   }
   
   void VM_Inc(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     auto a = VM_GetArg(vm);
     ++a;
   }
 
   void VM_Dec(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     auto a = VM_GetArg(vm);
     --a;
   }
 
   void VM_Xor(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     auto a = VM_GetArg(vm);
     auto b = VM_GetArg(vm);
     a ^ b;
   }
 
   void VM_Or(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     auto a = VM_GetArg(vm);
     auto b = VM_GetArg(vm);
     a | b;
   }
 
   void VM_Not(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     auto a = VM_GetArg(vm);
     ~a;
   }
   
   void VM_And(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     auto a = VM_GetArg(vm);
     auto b = VM_GetArg(vm);
     a & b;
   }
 
   void VM_LS(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     auto a = VM_GetArg(vm);
     auto b = VM_GetArg(vm);
     a << b;
   }
 
   void VM_RS(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     auto a = VM_GetArg(vm);
     auto b = VM_GetArg(vm);
     a >> b;
@@ -807,6 +856,7 @@ namespace Virtual {
 
   
   void VM_Jmp(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     int offset;
     memcpy(&offset, vm.begin, sizeof(int)); vm.begin += sizeof(int);
     MewUserAssert(MEW_IN_RANGE(vm.memory, vm.end, vm.begin+offset), 
@@ -816,6 +866,7 @@ namespace Virtual {
   }
 
   void VM_Ret(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     if (vm.begin_stack.empty()) {
       vm.status = VM_Status_Ret; return;
     }
@@ -825,6 +876,7 @@ namespace Virtual {
   }
 
   void VM_Test(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     int x, y;
     vm.test = {0};
     VM_MathBase(vm, (uint*)&x, (uint*)&y);
@@ -839,6 +891,7 @@ namespace Virtual {
   }
 
   void VM_JE(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     int offset; 
     memcpy(&offset, vm.begin, sizeof(int));
     if (vm.test.equal) {
@@ -848,6 +901,7 @@ namespace Virtual {
     }
   }
   void VM_JEL(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     int offset; 
     memcpy(&offset, vm.begin, sizeof(int));
     if (vm.test.equal || vm.test.less) {
@@ -857,6 +911,7 @@ namespace Virtual {
     }
   }
   void VM_JEM(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     int offset; 
     memcpy(&offset, vm.begin, sizeof(int));
     if (vm.test.equal || vm.test.more) {
@@ -866,6 +921,7 @@ namespace Virtual {
     }
   }
   void VM_JL(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     int offset; 
     memcpy(&offset, vm.begin, sizeof(int));
     if (vm.test.less) {
@@ -875,6 +931,7 @@ namespace Virtual {
     }
   }
   void VM_JM(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     int offset; 
     memcpy(&offset, vm.begin, sizeof(int));
     if (vm.test.more) {
@@ -884,6 +941,7 @@ namespace Virtual {
     }
   }
   void VM_JNE(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     int offset; 
     memcpy(&offset, vm.begin, sizeof(int));
     if (!vm.test.equal) {
@@ -894,18 +952,21 @@ namespace Virtual {
   }
 
   void VM_Mov(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     auto a = VM_GetArg(vm);
     auto b = VM_GetArg(vm);
     VM_ARG::mov(a, b);
   }
 
   void VM_Swap(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     auto a = VM_GetArg(vm);
     auto b = VM_GetArg(vm);
     VM_ARG::swap(a, b);
   }
 
   void VM_MSet(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     uint x; /* start */
     uint y; /* size  */
     uint z; /* value */
@@ -918,12 +979,14 @@ namespace Virtual {
   }
 
   void VM_Putc(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     wchar_t long_char;
     memcpy(&long_char, vm.begin, sizeof(wchar_t)); vm.begin+=sizeof(wchar_t);
-    putwchar(long_char);
+    fputwc(long_char, vm.std_out);
   }
   
   void VM_Puti(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     uint offset;
     memcpy(&offset, vm.begin, sizeof(uint)); vm.begin+=sizeof(uint);
     vm.rdi += offset;
@@ -931,27 +994,29 @@ namespace Virtual {
     vm.rdi -= offset;
     char str[12] = {0};
     mew::_itoa10(x, str);
-    fputs(str, stdout);
+    fputs(str, vm.std_out);
   }
 
   void VM_Puts(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     uint offset;
     memcpy(&offset, vm.begin, sizeof(uint)); vm.begin+=sizeof(uint);
     MewUserAssert(vm.heap+offset < vm.end, "out of memory");
     byte* pointer = vm.heap+offset;
     char* begin = (char*)pointer;
     while (*(begin) != 0) {
-      putchar(*(begin++));
-      // putwchar(*(begin++));
+      fputc(*(begin++), vm.std_out);
     }
   }
 
   void VM_Getch(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     int& a = VM_GetArg(vm).getInt();
     a = mew::wait_char();
   }
 
   void VM_Open(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     uint offset;
     memcpy(&offset, vm.begin, sizeof(uint)); vm.begin+=sizeof(uint);
     MewUserAssert(vm.heap+offset < vm.end, "out of memory");
@@ -964,6 +1029,7 @@ namespace Virtual {
   }
 
   void VM_Swst(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     int idx;
     bool use_stack;
     memcpy(&use_stack, vm.begin++, sizeof(use_stack));
@@ -976,6 +1042,7 @@ namespace Virtual {
   }
   
   void VM_Write(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     uint offset;
     memcpy(&offset, vm.begin, sizeof(uint)); vm.begin+=sizeof(uint);
     MewUserAssert(vm.heap+offset < vm.end, "out of memory");
@@ -984,6 +1051,7 @@ namespace Virtual {
   }
   
   void VM_Read(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
     uint offset;
     memcpy(&offset, vm.begin, sizeof(uint)); vm.begin+=sizeof(uint);
     MewUserAssert(vm.heap+offset < vm.end, "out of memory");
@@ -993,11 +1061,10 @@ namespace Virtual {
     MewUserAssert(vm.heap+offset+(chunk_size*2) < vm.end, "out of memory (chunk too big)");
     fgets((char*)pointer, chunk_size, vm.r_stream);
   }
-  
 
   void RunLine(VirtualMachine& vm) {
     byte head_byte = *vm.begin++;
-    // printf("[%i]\n", head_byte);
+    vm.debug.last_head_byte = head_byte;
     if (vm.flags.heap_lock_execute) { 
       MewAssert(vm.begin < vm.heap);
     }
@@ -1124,6 +1191,8 @@ namespace Virtual {
     byte* begin = vm.memory;
     byte* end   = begin+vm.capacity;
     byte* alloc_space = begin+code_size+1;
+    vm.flags.use_debug = code.cme.flags.has_debug;
+    vm.src = &code;
     vm.heap = alloc_space;
     vm.begin = begin;
     vm.end = end;
@@ -1132,7 +1201,21 @@ namespace Virtual {
       memcpy(vm.heap, code.data, code.data_size*sizeof(*code.data));
     }
     while (vm.begin < vm.end && vm.status != VM_Status_Ret) {
-      RunLine(vm);
+      ++vm.process_cycle;
+      // try {
+        RunLine(vm);
+      // } catch(std::exception& e) {
+      //   if (vm.flags.use_debug) {
+      //     size_t cursor = vm.capacity - (size_t)(vm.end-vm.begin);
+      //     for (int i = 0; i < code.cme.debug.size(); ++i) {
+      //       if (code.cme.debug[i].cursor >= cursor) {
+      //         printf("\n[DEBUG_ERROR] at (%i) in (%s)\n", code.cme.debug[i].line, vm.debug.last_fn);
+      //         break;
+      //       }
+      //     }
+      //   }
+      //   throw e;
+      // }
     }
     vm.status = VM_Status_Panding;
     return vm.stack.top();
@@ -1151,6 +1234,93 @@ namespace Virtual {
     return Run(vm, code);
   }
 
+  class VM_Async {
+  public:
+    struct ExecuteInfo {
+      enum struct Status {
+        Execute, Errored, Done
+      } status;
+      int result;
+    }; 
+  private:
+    mew::stack<VirtualMachine*> m_vms;
+    mew::stack<ExecuteInfo> m_execs;
+  public:
+    VM_Async() { }
+
+    void hardStop() {
+      for (int i = 0; i < m_vms.size(); ++i) {
+        delete m_vms[i];
+      }
+      m_vms.clear();
+      m_execs.clear();
+    }
+    
+    int Append(Code& code) {
+      VirtualMachine* vm = new VirtualMachine();
+      Alloc(*vm, code);
+      LoadMemory(*vm, code);
+      size_t code_size = __VM_ALIGN(code.capacity, VM_CODE_ALIGN);
+      MewAssert(vm->capacity > code_size);
+      vm->flags.use_debug = code.cme.flags.has_debug;
+      vm->src = &code;
+      vm->heap = vm->begin+code_size+1;
+      vm->begin = vm->memory;
+      vm->end = vm->begin+vm->capacity;
+      vm->status = VM_Status_Execute;
+      if (code.data != nullptr) {
+        memcpy(vm->heap, code.data, code.data_size*sizeof(*code.data));
+      }
+      m_execs.push((ExecuteInfo){ExecuteInfo::Status::Execute, -1});
+      return m_vms.push(vm);
+    }
+
+    bool is_ends(int id) {
+      return m_vms[id]->status == VM_Status_Ret;
+    }
+
+    int get_status_code(int id) {
+      return m_execs[id].result;
+    }
+        
+    VirtualMachine* GetById(int id) {
+      return m_vms[id];
+    }
+
+    void ExecuteStep() {
+      for (int i = 0; i < m_vms.size(); ++i) {
+        m_execs[i].result = this->Run(*m_vms[i], *m_vms[i]->src);
+        if (m_vms[i]->status == VM_Status_Panding) {
+          m_execs[i].status = ExecuteInfo::Status::Done;
+        }
+        if (m_vms[i]->status == VM_Status_Error) {
+          m_execs[i].status = ExecuteInfo::Status::Errored;
+        }
+      }
+    }
+    
+    int Run(VirtualMachine& vm, Code& code) {
+      if (!(vm.begin < vm.end && vm.status != VM_Status_Ret)) {
+        vm.status = VM_Status_Panding;
+        return vm.stack.top();
+      }
+      ++vm.process_cycle;
+      try {
+        RunLine(vm);
+      } catch(std::exception& e) {
+        size_t cursor = vm.capacity - (size_t)(vm.end-vm.begin);
+        for (int i = 0; i < code.cme.debug.size(); ++i) {
+          if (code.cme.debug[i].cursor >= cursor) {
+            fprintf(vm.std_out, "\n[DEBUG_ERROR] at (%i) in (%s)\n", code.cme.debug[i].line, vm.debug.last_fn);
+            vm.status = VM_Status_Error;
+            break;
+          }
+        }
+      }
+      return -1;
+    }
+  };
+  
   int Execute(const char* path) {
     Code* code = Code_LoadFromFile(path);
     return Execute(*code);

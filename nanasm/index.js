@@ -8,7 +8,7 @@ import { spawn } from "node:child_process";
 import fs, { existsSync } from "fs";
 import path from "path";
 
-import colors from "colors"
+import colors from "colors/index.js"
 
 var inputs = ["test.nsm"];
 var output = "./test.nb"

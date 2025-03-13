@@ -1,6 +1,7 @@
 #include <iostream>
 #include "mewall.h"
 #include "virtual.hpp"
+#include "shell.hpp"
 #if defined(_WIN32)
 
 #include <windows.h>
@@ -21,28 +22,33 @@ using namespace std;
 #endif
 
 #define HELP_PAGE \
-	"Usage:\n" \
-	"> ./nan <path/to/file>\n" \
-	"Flags:\n" \
-	"-h, --help\t\tShow this help page\n" 
+	"not have help page"
+	// "Usage:\n" \
+	// "> ./nan <path/to/file>\n" \
+	// "Flags:\n" \
+	// "-h, --help\t\tShow this help page\n" 
 
 int main(int argc, char** argv) {
+	using namespace Virtual::Shell;
 	mew::args __args(argc, argv);
 	__args.normalize();
 	// __args.print();
 
 	if (
-		!__args.has_needs(1)   ||
 		__args.has("-h")      ||
 		__args.has("--help")
 	) {
 		printf(HELP_PAGE); exit(0);
 	}
+	
+	Shell shell;
+	while(shell.listen()) {}
+	
 
-	char* path = __args.getNextPath();
-	auto outputs = mew::run_cmd_get_output(mew::string::Format("node E:/so2u/GITHUB/cuba/nan/nanasm/index.js %s"));
-	auto outputs2 = mew::run_cmd_get_output("E:/so2u/GITHUB/cuba/nan/build/bin/nanvm.exe E:/so2u/GITHUB/cuba/nan/nanasm/temp.nb");
-	std::cout << outputs << std::endl;
-	std::cout << outputs2 << std::endl;
+	// char* path = __args.getNextPath();
+	// auto outputs = mew::run_cmd_get_output(mew::string::Format("node E:/so2u/GITHUB/cuba/nan/nanasm/index.js %s"));
+	// auto outputs2 = mew::run_cmd_get_output("E:/so2u/GITHUB/cuba/nan/build/bin/nanvm.exe E:/so2u/GITHUB/cuba/nan/nanasm/temp.nb");
+	// std::cout << outputs << std::endl;
+	// std::cout << outputs2 << std::endl;
 	return 0;
 }

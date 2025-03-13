@@ -1,7 +1,6 @@
 entry __start
 
 data db hellow "Hellow, world\n\0"
-data da space[1000]
 
 __start:
 	puts hellow
@@ -14,6 +13,5 @@ L1:
 	inc (rdi-0)
 	jmp L1
 LE1:
-	mov (r1), 10
 	push 0
 	ret

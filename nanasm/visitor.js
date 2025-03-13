@@ -6,6 +6,7 @@ export default class VisitorImpl extends Visitor {
 	builder = new CodeBuilder();
 	
 	visitProgram(ctx) {
+		this.builder.write_source(ctx);
 		let vis = this.visitChildren(ctx);
 		return vis;
 	}
@@ -14,6 +15,7 @@ export default class VisitorImpl extends Visitor {
 		let vis = this.visitChildren(ctx)?.flat(1)?.[0];
 		return vis;
 	}
+
 	visitRdi_offset(ctx) {
 		let [,,num,] = ctx.children.map(e=>e.getText())
 		num = parseInt(num);
@@ -59,7 +61,6 @@ export default class VisitorImpl extends Visitor {
 			"type":"mov",
 			"value":vis
 		}
-		console.log(vis);
 	}
 
 	visitCall(ctx) {
@@ -133,13 +134,16 @@ export default class VisitorImpl extends Visitor {
 	}
 
 	visitPuts(ctx) {
+		this.builder.write_debug(ctx);
 		let [type,value] = ctx.children.map(e=>e.getText())
 		this.builder._puts(value);
 		return {type, value};
 	}
 
 	visitPuti(ctx) {
+		this.builder.write_debug(ctx);
 		let vis = this.visitChildren(ctx)?.filter(e=>e!=void 0)?.[0];
+		console.log(vis)
 		if (vis?.length == 0) {
 			return null; // todo error
 		}
@@ -148,6 +152,7 @@ export default class VisitorImpl extends Visitor {
 	}
 
 	visitInc(ctx) {
+		this.builder.write_debug(ctx);
 		let vis = this.visitChildren(ctx)?.filter(e=>e!=void 0)?.[0]
 		if (vis?.length == 0) {
 			return null; // todo error
@@ -156,26 +161,31 @@ export default class VisitorImpl extends Visitor {
 		return {"type":"inc", "value":vis};
 	}
 	visitTest(ctx) {
+		this.builder.write_debug(ctx);
 		this.builder._test();
 		return {"type":"test"};
 	}
 	
 	visitJel(ctx) {
+		this.builder.write_debug(ctx);
 		let [type,value] = ctx.children.map(e=>e.getText())
 		this.builder._jel(value);
 		return {type, value};
 	}
 	visitJem(ctx) {
+		this.builder.write_debug(ctx);
 		let [type,value] = ctx.children.map(e=>e.getText())
 		this.builder._jem(value);
 		return {type, value};
 	}
 	visitJl(ctx) {
+		this.builder.write_debug(ctx);
 		let [type,value] = ctx.children.map(e=>e.getText())
 		this.builder._jl(value);
 		return {type, value};
 	}
 	visitJm(ctx) {
+		this.builder.write_debug(ctx);
 		let [type,value] = ctx.children.map(e=>e.getText())
 		this.builder._jm(value);
 		return {type, value};
@@ -191,29 +201,35 @@ export default class VisitorImpl extends Visitor {
 		return {type, value};
 	}
 	visitJmp(ctx) {
+		this.builder.write_debug(ctx);
 		let [type,value] = ctx.children.map(e=>e.getText())
 		this.builder._jmp(value);
 		return {type, value};
 	}
 	visitRet(ctx) {
+		this.builder.write_debug(ctx);
 		this.builder._ret();
 		return {"type":"ret"};
 	}
 
 
 	visitPush(ctx) {
+		this.builder.write_debug(ctx);
 		let vis = this.visitChildren(ctx)?.filter(e=>e!=void 0)?.[0]
-		let [type,value] = ctx.children.map(e=>e.getText())
-		if (vis != void 0) {
-			if (vis.reg != void 0) {
-				this.builder._rpush(vis);
-				return {type, "vtype": "reg", "value":vis};
-			}
-			return {type, value};
-		} 
-		value = parseInt(value);
-		this.builder._push(value);
-		return {type, value};
+		// console.log(vis)
+		// let [type,value] = ctx.children.map(e=>e.getText())
+		// if (vis != void 0) {
+		// 	if (vis.reg != void 0) {
+		// 		this.builder._rpush(vis);
+		// 		return {type, "vtype": "reg", "value":vis};
+		// 	} else if (vis.type == "number") {
+		// 		this.builder._push(vis.value);
+		// 	}
+		// 	return {type, value};
+		// } 
+		// value = parseInt(value);
+		this.builder._push(vis);
+		return {"type":"push", "value": vis};
 	}
 	
 	

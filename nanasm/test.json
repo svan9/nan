@@ -24,11 +24,17 @@
   },
   {
     "type": "push",
-    "value": "0"
+    "value": {
+      "type": "number",
+      "value": 0
+    }
   },
   {
     "type": "push",
-    "value": "10"
+    "value": {
+      "type": "number",
+      "value": 10
+    }
   },
   {
     "type": "label",
@@ -76,7 +82,10 @@
   },
   {
     "type": "push",
-    "value": "0"
+    "value": {
+      "type": "number",
+      "value": 0
+    }
   },
   {
     "type": "ret"

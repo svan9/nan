@@ -30,7 +30,20 @@ export default class CodeBuilder {
 	defines = {}
 	callings = {}
 	entry = ""
+	source = []
+	debug_info = []
 	constructor() { }
+
+	write_source(ctx) {
+		this.source = ctx.start.source[1].strdata.split(/\r\n/);
+	}
+
+	write_debug(ctx) {
+		let number = ctx.start.line;
+		// let src = this.source[number];
+		let cursor = this.cursor;
+		this.debug_info.push({number, cursor});
+	}
 
 	add(code) {
 		if (this.code.length <= this.cursor) {
@@ -73,7 +86,21 @@ export default class CodeBuilder {
 	}
 
 	push_arg(arg) {
-		console.log(arg);
+		switch(arg.type) {
+			case "reg": {
+				this.add(vm.Instruction["REG"]);
+				this.add(arg.kind);
+				this.add(arg.idx);		
+			} break;
+			case "number": {
+				this.add(vm.Instruction["NUM"]);
+				this.addUint(arg.value);		
+			} break;
+			case "rdi_offset": {
+				this.add(vm.Instruction["ST"]);
+				this.addUint(arg.value);
+			} break;
+		}
 	}
 
 	_mov(args) {
@@ -107,6 +134,7 @@ export default class CodeBuilder {
 		this.addUint(offset)
 		this.add(vm.Instruction["NUM"])
 	}
+	
 	_gch(offset) {
 		this.add(vm.Instruction["GETCH"])
 		this.addUint(offset)
@@ -119,20 +147,13 @@ export default class CodeBuilder {
 
 	_push(value) {
 		this.add(vm.Instruction["PUSH"]);
-		this.add(vm.Instruction["NUM"]);
-		this.addUint(value);
+		this.push_arg(value);
 	}
-	
-	_rpush(val) {
-		this.add(vm.Instruction["PUSH"]);
-		this.add(vm.Instruction["REG"]);
-		this.add(val.kind);
-		this.add(val.idx);
-	}
-	
+
 	_pop() {
 		this.add(vm.Instruction["POP"]);
 	}
+	
 	_rpop(val) {
 		this.add(vm.Instruction["RPOP"]);
 		this.add(val.kind);
@@ -141,35 +162,35 @@ export default class CodeBuilder {
 
 	_inc(value) {
 		this.add(vm.Instruction["INC"]);
-		this.addUint(value);
+		this.push_arg(value);
 	}
 	_dec(value) {
 		this.add(vm.Instruction["DEC"]);
-		this.addUint(value);
+		this.push_arg(value);
 	}
 
 	_add(a, b) {
 		this.add(vm.Instruction["ADD"]);
-		this.addUint(a);
-		this.addUint(b);
+		this.push_arg(a);
+		this.push_arg(b);
 	}
 
 	_sub(a, b) {
 		this.add(vm.Instruction["SUB"]);
-		this.addUint(a);
-		this.addUint(b);
+		this.push_arg(a);
+		this.push_arg(b);
 	}
 
 	_mul(a, b) {
 		this.add(vm.Instruction["MUL"]);
-		this.addUint(a);
-		this.addUint(b);
+		this.push_arg(a);
+		this.push_arg(b);
 	}
 
 	_div(a, b) {
 		this.add(vm.Instruction["DIV"]);
-		this.addUint(a);
-		this.addUint(b);
+		this.push_arg(a);
+		this.push_arg(b);
 	}
 	_jel(name) {
 		this.add(vm.Instruction['JEL']);
@@ -351,9 +372,11 @@ export default class CodeBuilder {
 		return this;
 	}
 
-	build() {
+	build(flags = {"debug": false}) {
+		let debug_info = new Uint8Array(flags.debug ? (this.debug_info.length*8+6) : 0);
 		let data_size = this.get_data_length();
-		let len = this.cursor + data_size + 13;
+		const manifest_length = 16;
+		let len = this.cursor + data_size + manifest_length + debug_info.length + 2;
 		// len = (data_size-len)+this.current_code_cursor + 12;
 		let arr = new Uint8Array(len);
 		let data_arr = new Uint8Array(data_size);
@@ -369,18 +392,33 @@ export default class CodeBuilder {
 			data_cursor += v.length;
 		}
 		/** MANIFEST */
-		const manifest_length = 12;
+		let manifest_flags = 0;
+		manifest_flags |= !flags.debug ? 0: (1 << 1);
 		// version 0+4
 		arr.set(numToUint8Array(vm.version), 0); 
+		// manifest flags
+		arr.set(numToUint8Array(manifest_flags), 4); 
 		// code length 4+4
-		arr.set(numToUint8Array(this.cursor), 4);
+		arr.set(numToUint8Array(this.cursor), 8);
 		// data length
-		arr.set(numToUint8Array(data_size), 8);
+		arr.set(numToUint8Array(data_size), 12);
 		/** SECTIONS */
 		// code 8+n
 		arr.set(this.code.subarray(0, this.cursor-1), manifest_length);
 		// data
-		arr.set(data_arr, this.cursor+manifest_length)
+		arr.set(data_arr, this.cursor+manifest_length);
+		if (flags.debug) {
+			let debug_cursor = 0;
+			debug_info.set(numToUint8Array(debug_info.length), debug_cursor);
+			debug_cursor += 4;
+			this.debug_info.forEach(e=>{
+				debug_info.set(numToUint8Array(e.number), debug_cursor);
+				debug_info.set(numToUint8Array(e.cursor), debug_cursor+4);
+				debug_cursor += 8;
+			});
+			arr.set(debug_info, this.cursor+manifest_length+data_arr.length);
+		}
+
 		return arr;
 	}
 };

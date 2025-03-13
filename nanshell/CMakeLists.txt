@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(nan LANGUAGES CXX)
+project(nanshell LANGUAGES CXX)
 
 set(PROJECT_VERSION 1A00F)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
