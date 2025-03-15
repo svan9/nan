@@ -331,6 +331,9 @@ namespace Virtual::Asm {
 					bool is_datasize = same_type_sequence(line, y, {
 						TokenType::SquareOpenBracket, TokenType::Number, TokenType::SquareCloseBracket
 					});
+					bool is_label = same_type_sequence(line, y, {
+						TokenType::Text, TokenType::Colon
+					});
 					if (is_rdioffset) {
 						tk.type = TokenType::RdiOffset;
 						tk.value = line[y+3].value;
@@ -339,6 +342,10 @@ namespace Virtual::Asm {
 						tk.type = TokenType::DataSize;
 						tk.value = line[y+1].value;
 						line.erase(y+1, 2);
+					} else if (is_label) {
+						tk.type = TokenType::Label;
+						// tk.value = line[y].value;
+						line.erase(y+1);
 					}
 					// line[y].print();
 				}
@@ -348,11 +355,19 @@ namespace Virtual::Asm {
 		}
 	};
 
+	#define ALL_REG_CASE \
+	TokenType::fx1: case TokenType::dx1: case TokenType::r1: case TokenType::rx1: \
+	case TokenType::fx2: case TokenType::dx2: case TokenType::r2: case TokenType::rx2: \
+	case TokenType::fx3: case TokenType::dx3: case TokenType::r3: case TokenType::rx3: \
+	case TokenType::fx4: case TokenType::dx4: case TokenType::r4: case TokenType::rx4: \
+	case TokenType::fx5: case TokenType::dx5: case TokenType::r5: case TokenType::rx5 \
+
 	using namespace ::Virtual::Lib;
 	struct Compiler {
 		/*
 			todo for Compiler
 			[ ] store labels in code for nexts calling 
+			[ ] error messages with line pointer
 			[ ] others
 			[ ] (::Virtual) save Code to file
 		*/
@@ -360,12 +375,311 @@ namespace Virtual::Asm {
 		std::unordered_map<const char*, size_t> labels;
 		size_t entry = 0;
 		Builder builder;
+		// mew::stack<Error>
 
 		Compiler(Lexer& lexer): lexer(lexer) {
 			compile();
 		}
 
+		void writeReg(TokenType& type) {
+			byte _rtype, _ridx;
+			switch(type) {
+				case TokenType::fx1: _ridx = 0;
+				case TokenType::fx2: _ridx = 1;
+				case TokenType::fx3: _ridx = 2;
+				case TokenType::fx4: _ridx = 3;
+				case TokenType::fx5: _ridx = 4;
+					_rtype = (byte)Virtual::VM_RegType::FX; break;
+				case TokenType::dx1: _ridx = 0;
+				case TokenType::dx2: _ridx = 1;
+				case TokenType::dx3: _ridx = 2;
+				case TokenType::dx4: _ridx = 3;
+				case TokenType::dx5: _ridx = 4;
+					_rtype = (byte)Virtual::VM_RegType::FX; break;
+				case TokenType::r1: _ridx = 0;
+				case TokenType::r2: _ridx = 1;
+				case TokenType::r3: _ridx = 2;
+				case TokenType::r4: _ridx = 3;
+				case TokenType::r5: _ridx = 4;
+					_rtype = (byte)Virtual::VM_RegType::FX; break;
+				case TokenType::rx1: _ridx = 0;
+				case TokenType::rx2: _ridx = 1;
+				case TokenType::rx3: _ridx = 2;
+				case TokenType::rx4: _ridx = 3;
+				case TokenType::rx5: _ridx = 4;
+					_rtype = (byte)Virtual::VM_RegType::FX; break;
+				default: MewUserAssert(false, "IS NOT A REGISTER LEXEM");
+			}
+			builder << _rtype << _ridx;
+		}
+
+		void WriteArgTyped(Token& arg1) {
+			switch(arg1.type) {
+				case TokenType::Number: 
+					builder << Virtual::Instruction_NUM; 
+					builder << (uint)arg1.value;
+					break; 
+				case TokenType::RdiOffset: 
+					builder << Virtual::Instruction_ST; 
+					builder << (uint)arg1.value;
+					break;
+				case ALL_REG_CASE:
+					builder << Virtual::Instruction_REG; 
+					writeReg(arg1.type);
+					break; 
+				default: MewUserAssert(false, "PUSH ? unsupported arg type");
+			}
+		}
+
+		void WriteArgTypedReg(Token& arg1) {
+			switch(arg1.type) {
+				case ALL_REG_CASE:
+					builder << Virtual::Instruction_REG; 
+					writeReg(arg1.type);
+					break; 
+				default: MewUserAssert(false, "PUSH ? unsupported arg type");
+			}
+		}
+
+		void db_data(Token& arg2, Token& arg3, size_t argc) {
+			MewUserAssert(argc == 3, "not match arg count");
+			const char* data_name = arg2.value;
+			switch (arg3.type) {
+				case TokenType::String:
+					const char* data_value = arg3.value;
+					builder.AddData(data_name, data_value);
+					break;
+				default: MewUserAssert(false, "DATA DB ? unsupported arg type");
+			}
+		}
+
+		void da_data(Token& arg2, Token& arg3, size_t argc) {
+			MewUserAssert(argc == 3, "not match arg count");
+			const char* data_name = arg2.value;
+			switch (arg3.type) {
+				case TokenType::DataSize:
+					int data_size = (int)arg3.value;
+					builder.AddDataAfter(data_name, data_size);
+					break;
+				default: MewUserAssert(false, "DATA DA ? unsupported arg type");
+			}
+		}
+
+		void puti(Token& arg1, size_t argc) {
+			MewUserAssert(argc == 1 && arg1.type == TokenType::RdiOffset, "not match arg count");
+			int offset = (int)arg1.value;
+			builder << Virtual::Instruction_PUTI << offset;
+		}
+
+		void puts(Token& arg1, size_t argc) {
+			MewUserAssert(argc == 1 && arg1.type == TokenType::Text, "not match arg count");
+			const char* name = arg1.value;
+			builder.Puts(name);
+		}
+
+		void push(Token& arg1, size_t argc) {
+			MewUserAssert(argc == 1, "not match arg count");
+			builder << Virtual::Instruction_PUSH;
+			WriteArgTyped(arg1);
+		}
+		
+		void pop(size_t argc) {
+			MewUserAssert(argc == 0, "not match arg count");
+			builder << Virtual::Instruction_POP;
+		}
+		
+		void rpop(Token& arg1, size_t argc) {
+			MewUserAssert(argc == 1, "not match arg count");
+			builder << Virtual::Instruction_RPOP;
+			WriteArgTypedReg(arg1);
+		}
+
+		void add(Token& arg1, Token& arg2, size_t argc) {
+			MewUserAssert(argc == 2, "not match arg count");
+			builder << Virtual::Instruction_ADD;
+			WriteArgTyped(arg1);
+			WriteArgTyped(arg2);
+		}
+
+		void sub(Token& arg1, Token& arg2, size_t argc) {
+			MewUserAssert(argc == 2, "not match arg count");
+			builder << Virtual::Instruction_SUB;
+			WriteArgTyped(arg1);
+			WriteArgTyped(arg2);
+		}
+		void mul(Token& arg1, Token& arg2, size_t argc) {
+			MewUserAssert(argc == 2, "not match arg count");
+			builder << Virtual::Instruction_MUL;
+			WriteArgTyped(arg1);
+			WriteArgTyped(arg2);
+		}
+		void div(Token& arg1, Token& arg2, size_t argc) {
+			MewUserAssert(argc == 2, "not match arg count");
+			builder << Virtual::Instruction_DIV;
+			WriteArgTyped(arg1);
+			WriteArgTyped(arg2);
+		}
+		void inc(Token& arg1, size_t argc) {
+			MewUserAssert(argc == 1 && arg1.type == TokenType::RdiOffset, "not match arg count or type");
+			builder << Virtual::Instruction_INC;
+			WriteArgTyped(arg1);
+		}
+
+		void dec(Token& arg1, size_t argc) {
+			MewUserAssert(argc == 1 && arg1.type == TokenType::RdiOffset, "not match arg count or type");
+			builder << Virtual::Instruction_DEC;
+			WriteArgTyped(arg1);
+		}
+		
+		void _xor(Token& arg1, Token& arg2, size_t argc) {
+			MewUserAssert(argc == 2, "not match arg count");
+			builder << Virtual::Instruction_XOR;
+			WriteArgTyped(arg1);
+			WriteArgTyped(arg2);
+		}
+
+		void _or(Token& arg1, Token& arg2, size_t argc) {
+			MewUserAssert(argc == 2, "not match arg count");
+			builder << Virtual::Instruction_OR;
+			WriteArgTyped(arg1);
+			WriteArgTyped(arg2);
+		}
+
+		void _and(Token& arg1, Token& arg2, size_t argc) {
+			MewUserAssert(argc == 2, "not match arg count");
+			builder << Virtual::Instruction_AND;
+			WriteArgTyped(arg1);
+			WriteArgTyped(arg2);
+		}
+
+		void _ls(Token& arg1, Token& arg2, size_t argc) {
+			MewUserAssert(argc == 2, "not match arg count");
+			builder << Virtual::Instruction_LS;
+			WriteArgTyped(arg1);
+			WriteArgTyped(arg2);
+		}
+
+		void _rs(Token& arg1, Token& arg2, size_t argc) {
+			MewUserAssert(argc == 2, "not match arg count");
+			builder << Virtual::Instruction_RS;
+			WriteArgTyped(arg1);
+			WriteArgTyped(arg2);
+		}
+
+		void _not(Token& arg1, size_t argc) {
+			MewUserAssert(argc == 1 && arg1.type == TokenType::RdiOffset, "not match arg count or type");
+			builder << Virtual::Instruction_NOT;
+			WriteArgTyped(arg1);
+		}
+
+		void _ret(size_t argc) {
+			MewUserAssert(argc == 0, "not match arg count or type");
+			builder << Virtual::Instruction_RET;
+		}
+		
+		void _jmp(Token& arg1, size_t argc) {
+			MewUserAssert(argc == 1 && arg1.type == TokenType::Text, "not match arg count");
+			const char* label_name = arg1.value;
+			builder.Jump(label_name); 
+		}
+
+		void _je(Token& arg1, size_t argc) {
+			MewUserAssert(argc == 1 && arg1.type == TokenType::Text, "not match arg count");
+			const char* label_name = arg1.value;
+			builder.JumpIfEqual(label_name); 
+		}
+
+		void _jel(Token& arg1, size_t argc) {
+			MewUserAssert(argc == 1 && arg1.type == TokenType::Text, "not match arg count");
+			const char* label_name = arg1.value;
+			builder.JumpIfEqualLess(label_name); 
+		}
+
+		void _jem(Token& arg1, size_t argc) {
+			MewUserAssert(argc == 1 && arg1.type == TokenType::Text, "not match arg count");
+			const char* label_name = arg1.value;
+			builder.JumpIfEqualMore(label_name); 
+		}
+
+		void _jne(Token& arg1, size_t argc) {
+			MewUserAssert(argc == 1 && arg1.type == TokenType::Text, "not match arg count");
+			const char* label_name = arg1.value;
+			builder.JumpIfNotEqual(label_name); 
+		}
+
+		void _jl(Token& arg1, size_t argc) {
+			MewUserAssert(argc == 1 && arg1.type == TokenType::Text, "not match arg count");
+			const char* label_name = arg1.value;
+			builder.JumpIfLess(label_name); 
+		}
+
+		void _jm(Token& arg1, size_t argc) {
+			MewUserAssert(argc == 1 && arg1.type == TokenType::Text, "not match arg count");
+			const char* label_name = arg1.value;
+			builder.JumpIfMore(label_name); 
+		}
+
+		// todo nexts
+		void _mov(Token& arg1, size_t argc) {
+			MewNotImpl();
+		}
+		void _swap(Token& arg1, size_t argc) {
+			MewNotImpl();
+		}
+		void _mset(Token& arg1, size_t argc) {
+			MewNotImpl();
+		}
+
 		void compile() {
+			for (int i = 0; lexer.token_row.size(); ++i) {
+				auto& line = lexer.token_row[i];
+				if (line.size() == 0) { continue; }
+				size_t argc = line.size()-1;
+				auto first = line[0];
+				switch (first.type) {
+					// data
+					case TokenType::Data: {
+						auto& arg1 = line[1];
+						if (arg1.type == TokenType::DB) {
+							this->db_data(line[2], line[3], argc);
+						}
+					} break;
+					// movements
+					case TokenType::Ret: this->_ret(argc); break;
+					case TokenType::Jmp: this->_jmp(line[1], argc); break;
+					case TokenType::Label: builder.MarkLabel(first.value); break;
+					// cond movements
+					case TokenType::Je: this->_je(line[1], argc); break;
+					case TokenType::Jel: this->_jel(line[1], argc); break;
+					case TokenType::Jem: this->_jem(line[1], argc); break;
+					case TokenType::Jne: this->_jne(line[1], argc); break;
+					case TokenType::Jl: this->_jl(line[1], argc); break;
+					case TokenType::Jm: this->_jm(line[1], argc); break;
+					case TokenType::Test: builder.Test(); break;
+					// prints
+					case TokenType::Puti: this->puti(line[1], argc); break;
+					case TokenType::Puts: this->puts(line[1], argc); break;
+					// stack
+					case TokenType::Push: this->push(line[1], argc); break;
+					case TokenType::Pop: this->pop(argc); break;
+					case TokenType::Rpop: this->rpop(line[1], argc); break;
+					// math
+					case TokenType::Add: this->add(line[1], line[2], argc); break;
+					case TokenType::Sub: this->sub(line[1], line[2], argc); break;
+					case TokenType::Mul: this->mul(line[1], line[2], argc); break;
+					case TokenType::Div: this->div(line[1], line[2], argc); break;
+					case TokenType::Inc: this->inc(line[1], argc); break;
+					case TokenType::Dec: this->dec(line[1], argc); break;
+					case TokenType::Xor: this->_xor(line[1], line[2], argc); break;
+					case TokenType::Or: this->_or(line[1], line[2], argc); break;
+					case TokenType::Not: this->_not(line[1], argc); break;
+					case TokenType::And: this->_and(line[1], line[2], argc); break;
+					case TokenType::Ls: this->_ls(line[1], line[2], argc); break;
+					case TokenType::Rs: this->_rs(line[1], line[2], argc); break;
+					// todo nexts
+					default: MewUserAssert(false, "NOT ASSERTED TOKEN TYPE");
+				}
+			}
 			// builder.MarkLabel();
 		}
 	};

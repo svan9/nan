@@ -335,6 +335,13 @@ namespace Virtual::Lib {
     }
 
     ////////////////////////////////////////////////////////////
+    void Jump(std::string name) {
+      MewUserAssert(_functions.find(name) != _functions.end(), "undefined");
+      size_t line = _functions.at(name);
+      Jump(line);
+    }
+
+    ////////////////////////////////////////////////////////////
     void to_entry(size_t line) {
       int real_idx = Cursor() - line;
       CodeBuilder::untyped_pair pair;
@@ -380,7 +387,7 @@ namespace Virtual::Lib {
     }
 
     ////////////////////////////////////////////////////////////
-    void Puti(int offset) {
+    void Puti(int offset = 0) {
       ((*this) << Instruction_PUTI << (uint)offset);
     }
 
@@ -560,7 +567,7 @@ namespace Virtual::Lib {
     }
 
     ////////////////////////////////////////////////////////////
-    void Test(byte t1, byte t2) {
+    void Test(byte t1 = Virtual::Instruction_NUM, byte t2 = Virtual::Instruction_NUM) {
       ((*this) << Instruction_TEST << t1 << t2);
     }
 
@@ -598,6 +605,12 @@ namespace Virtual::Lib {
     }
 
 #pragma region conditional jumps
+
+    void JumpCondBase(std::string name, byte kind) {
+      uint address = GetAddressFunction(name);
+      int real_idx = Cursor() - address;
+      ((*this) << kind << real_idx);
+    }
 
     ////////////////////////////////////////////////////////////
     void JumpIfLess(std::string name) {
@@ -744,13 +757,18 @@ namespace Virtual::Lib {
     ////////////////////////////////////////////////////////////
     Builder& AddData(std::string name, const char* text) {
       size_t length = strlen(text)+1;
-      wchar_t* buffer = new wchar_t[length];
-      for (int i = 0; i < length; i) {
-        buffer[i] = text[i];
-      }
       Assign(name, length);
-      (*actual_builder) += buffer;
+      (*actual_builder) += text;
       return *this;
+    }
+
+    ////////////////////////////////////////////////////////////
+    Builder& AddDataAfter(std::string name, size_t size) {
+      MewNotImpl();
+      // size_t length = strlen(text)+1;
+      // Assign(name, length);
+      // (*actual_builder) += text;
+      // return *this;
     }
 
     ////////////////////////////////////////////////////////////
