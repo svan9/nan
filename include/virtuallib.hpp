@@ -288,9 +288,11 @@ namespace Virtual::Lib {
     std::map<std::string, size_t> _functions;
     std::map<std::string, VM_Processor> _externs_functions;
     std::map<std::string, Arena::Range> _vars;
+    std::map<std::string, uint> _wait_labels;
     mew::stack<uint> _deferred_calc;
     mew::stack<int> _stored_points;
     Arena _arena;
+    size_t jte = -1;
   public:
     ////////////////////////////////////////////////////////////
     Builder(): actual_builder(new CodeBuilder()) {}
@@ -299,9 +301,27 @@ namespace Virtual::Lib {
     void ExternFunction(std::string name, VM_Processor proc) {
       _externs_functions.insert({name, proc});
     }
+
+    ////////////////////////////////////////////////////////////
+    /// returns 
+    /// true - label already defined 
+    /// false - wait label define 
+    bool MarkWaitLabel(std::string name) {
+      auto waiter = _functions.find(name);
+      if(waiter != _functions.end()) { return true; }
+      _wait_labels.insert({name, Cursor()});
+      *this << (uint)0;
+      return false;
+    }
     
     ////////////////////////////////////////////////////////////
     void MarkLabel(const char* name) {
+      auto waiter = _wait_labels.find(name);
+      if(waiter != _wait_labels.end()) {
+        byte* _place = actual_builder->at(waiter->second);
+        uint offset = Cursor() - waiter->second;
+        memcpy(_place, &offset, sizeof(offset));
+      }
       _functions.insert({name, Cursor()});
     }
 
@@ -328,17 +348,30 @@ namespace Virtual::Lib {
       ((*this) << Instruction_RET);
     }
 
+    
     ////////////////////////////////////////////////////////////
-    void Jump(size_t line) {
-      int real_idx = Cursor() - line;
-      ((*this) << Instruction_JMP << real_idx);
+    void Jump(std::string name) {
+      (*this) << Instruction_JMP;
+      if (MarkWaitLabel(name)) {
+        size_t line = _functions.at(name);
+        int real_idx = line - Cursor();
+        ((*this) << real_idx);
+      }
     }
 
     ////////////////////////////////////////////////////////////
-    void Jump(std::string name) {
-      MewUserAssert(_functions.find(name) != _functions.end(), "undefined");
-      size_t line = _functions.at(name);
-      Jump(line);
+    void WaitEntry() {
+      *this << Instruction_JMP;
+      jte = this->Cursor();
+      *this << (uint)0;
+    }
+    
+    ////////////////////////////////////////////////////////////
+    void CompleteEntry(const char* name) {
+      size_t address = GetAddressFunction(name);
+      int real_idx = address - jte;
+      byte* jte_c = (*actual_builder).at(jte);
+      memcpy(jte_c, &real_idx, sizeof(uint));
     }
 
     ////////////////////////////////////////////////////////////
@@ -358,22 +391,9 @@ namespace Virtual::Lib {
     }
 
     ////////////////////////////////////////////////////////////
-    void CallFunction(std::string name) {
-      auto _func = _functions.find(name);
-      if (_func == _functions.end()) {
-        auto _e_func = _externs_functions.find(name);
-        MewUserAssert(_e_func != _externs_functions.end(), "invalid extern function");
-        uint idx = std::distance(_externs_functions.begin(), _e_func);
-        CallExternFunction(idx);
-        return;
-      }
-      Jump(_func->second);
-    }
-
-    ////////////////////////////////////////////////////////////
     uint GetAddressFunction(std::string name) {
       auto _func = _functions.find(name);
-      MewUserAssert(_func == _functions.end(), "undefined");
+      MewUserAssert(_func != _functions.end(), "undefined");
       return _func->second;
     }
 
@@ -414,7 +434,10 @@ namespace Virtual::Lib {
 
     ////////////////////////////////////////////////////////////
     uint Assign(std::string name, size_t size, bool clear_memory = false, const int value = 0) {
-      MewUserAssert(_vars.find(name) == _vars.end(), "already assign");
+      auto finded = _vars.find(name);
+      if (finded != _vars.end()) {
+        return finded->second.start;
+      }
       auto range = _arena.Alloc_s(size);
       _vars.insert({name, range});
       if (clear_memory) {
@@ -607,51 +630,42 @@ namespace Virtual::Lib {
 #pragma region conditional jumps
 
     void JumpCondBase(std::string name, byte kind) {
-      uint address = GetAddressFunction(name);
-      int real_idx = Cursor() - address;
-      ((*this) << kind << real_idx);
+      (*this) << kind;
+      if (MarkWaitLabel(name)) {
+        uint address = GetAddressFunction(name);
+        int real_idx = address - Cursor();
+        (*this) << (uint)real_idx;
+      }
     }
 
     ////////////////////////////////////////////////////////////
     void JumpIfLess(std::string name) {
-      uint address = GetAddressFunction(name);
-      int real_idx = Cursor() - address;
-      ((*this) << Instruction_JL << real_idx);
+      JumpCondBase(name, Instruction_JL);
     }
 
     ////////////////////////////////////////////////////////////
     void JumpIfMore(std::string name) {
-      uint address = GetAddressFunction(name);
-      int real_idx = Cursor() - address;
-      ((*this) << Instruction_JM << real_idx);
+      JumpCondBase(name, Instruction_JM);
     }
 
     ////////////////////////////////////////////////////////////
     void JumpIfEqual(std::string name) {
-      uint address = GetAddressFunction(name);
-      int real_idx = Cursor() - address;
-      ((*this) << Instruction_JE << real_idx);
+      JumpCondBase(name, Instruction_JE);
     }
 
     ////////////////////////////////////////////////////////////
     void JumpIfEqualLess(std::string name) {
-      uint address = GetAddressFunction(name);
-      int real_idx = Cursor() - address;
-      ((*this) << Instruction_JEL << real_idx);
+      JumpCondBase(name, Instruction_JEL);
     }
 
     ////////////////////////////////////////////////////////////
     void JumpIfEqualMore(std::string name) {
-      uint address = GetAddressFunction(name);
-      int real_idx = Cursor() - address;
-      ((*this) << Instruction_JEM << real_idx);
+      JumpCondBase(name, Instruction_JEM);
     }
 
     ////////////////////////////////////////////////////////////
     void JumpIfNotEqual(std::string name) {
-      uint address = GetAddressFunction(name);
-      int real_idx = Cursor() - address;
-      ((*this) << Instruction_JNE << real_idx);
+      JumpCondBase(name, Instruction_JNE);
     }
 
 #pragma endregion
@@ -681,18 +695,6 @@ namespace Virtual::Lib {
     
     ////////////////////////////////////////////////////////////
     const Code& operator*() { return Release(); }
-
-    ////////////////////////////////////////////////////////////
-    friend Builder& operator<<(Builder& b, CodeBuilder& gf) {
-      *b.actual_builder << gf;
-      return b;
-    }
-
-    ////////////////////////////////////////////////////////////
-    Builder& concat(Builder& gf) {
-      *actual_builder << *gf.actual_builder;
-      return *this;
-    }
 
     ////////////////////////////////////////////////////////////
     friend Builder& operator<<(Builder& b, uint gf) {
@@ -725,32 +727,15 @@ namespace Virtual::Lib {
     }
 
     ////////////////////////////////////////////////////////////
-    std::string GetIdConst(const wchar_t* text) const {
-      return std::string((char*)mew::get_cstr_hash(text));
-    }
-
-    ////////////////////////////////////////////////////////////
     std::string GetIdConst(const char* text) const {
       return std::string((char*)mew::get_cstr_hash(text));
     }
     
     ////////////////////////////////////////////////////////////
-    Builder& operator+=(const wchar_t* text) {
-      size_t __size = wcslen(text);
-      Assign(GetIdConst(text), __size);
-      (*actual_builder) += text;
-      return *this;
-    }
-    
-    ////////////////////////////////////////////////////////////
     Builder& operator+=(const char* text) {
       size_t length = strlen(text)+1;
-      wchar_t* buffer = new wchar_t[length];
-      for (int i = 0; i < length; i) {
-        buffer[i] = text[i];
-      }
-      Assign(GetIdConst(buffer), length);
-      (*actual_builder) += buffer;
+      Assign(GetIdConst(text), length);
+      (*actual_builder) += text;
       return *this;
     }
 
@@ -759,6 +744,13 @@ namespace Virtual::Lib {
       size_t length = strlen(text)+1;
       Assign(name, length);
       (*actual_builder) += text;
+      return *this;
+    }
+
+    ////////////////////////////////////////////////////////////
+    Builder& AddData(std::string name, byte* row, size_t size) {
+      Assign(name, size);
+      (*actual_builder).AddData(row, size);
       return *this;
     }
 

@@ -41,3 +41,43 @@ PUTC [char:2b]
 PUTI -offset:4b-
 PUTS <offset:4b>
 ```
+
+``` asm
+arg: rdi_offset | number | register
+label: string
+data: string
+
+;; stack
+push <arg>
+pop
+;; matg
+add <arg> <arg>
+sub <arg> <arg>
+mul <arg> <arg>
+div <arg> <arg>
+inc <arg>
+dec <arg>
+xor <arg> <arg>
+or 	<arg> <arg>
+not <arg>
+and	<arg> <arg>
+ls 	<arg> <arg>
+rs	<arg> <arg>
+;; movement
+jmp <label>
+test -no-args-
+je 	<label>
+jel <label>
+jem <label>
+jne <label>
+jl 	<label>
+jm 	<label>
+mov	<arg> <arg> ;; copy arg2 value to arg1
+swap <arg> <arg> ;; swap arg1 & arg2
+;; mset
+ret 
+
+putc <arg>
+puti <arg>
+puts <data>
+```

@@ -197,9 +197,23 @@ namespace Virtual::Asm {
 			// { "rdi", TokenType::Rdi},
 	};
 
+	struct DefaultTokenContext {
+		size_t char_idx;
+	};
+
+	namespace Contexts {
+		struct Number: DefaultTokenContext {
+			size_t size;
+			Number(size_t size): size(size) {}
+		};
+		using DataSize = Number;
+		using String = Number; 
+	}
+
 	struct Token {
 		TokenType type;
 		const char* value = nullptr;
+		void* context;
 
 		void print() {
 			const char* str = stringify_tokentype(type);
@@ -261,7 +275,8 @@ namespace Virtual::Asm {
 			}
 			if (*tk.value == '"' && getLastChar(tk.value) == '"') {
 				tk.type = TokenType::String;
-				tk.value = scopy(tk.value+1, strlen(tk.value)-2);
+				tk.context = new Contexts::String(strlen(tk.value)-2);
+				tk.value = str_parse(tk.value+1, strlen(tk.value)-2);
 				return;
 			}
 			/* 
@@ -375,6 +390,8 @@ namespace Virtual::Asm {
 		std::unordered_map<const char*, size_t> labels;
 		size_t entry = 0;
 		Builder builder;
+		const char* entry_name = nullptr;
+		Code* code = nullptr;
 		// mew::stack<Error>
 
 		Compiler(Lexer& lexer): lexer(lexer) {
@@ -431,6 +448,20 @@ namespace Virtual::Asm {
 			}
 		}
 
+		void WriteArgTypedLValue(Token& arg1) {
+			switch(arg1.type) {
+				case TokenType::RdiOffset: 
+					builder << Virtual::Instruction_ST; 
+					builder << (uint)arg1.value;
+					break;
+				case ALL_REG_CASE:
+					builder << Virtual::Instruction_REG; 
+					writeReg(arg1.type);
+					break; 
+				default: MewUserAssert(false, "PUSH ? unsupported arg type");
+			}
+		}
+
 		void WriteArgTypedReg(Token& arg1) {
 			switch(arg1.type) {
 				case ALL_REG_CASE:
@@ -446,8 +477,7 @@ namespace Virtual::Asm {
 			const char* data_name = arg2.value;
 			switch (arg3.type) {
 				case TokenType::String:
-					const char* data_value = arg3.value;
-					builder.AddData(data_name, data_value);
+					builder.AddData(data_name, (byte*)arg3.value, ((Contexts::String*)arg3.context)->size);
 					break;
 				default: MewUserAssert(false, "DATA DB ? unsupported arg type");
 			}
@@ -458,8 +488,7 @@ namespace Virtual::Asm {
 			const char* data_name = arg2.value;
 			switch (arg3.type) {
 				case TokenType::DataSize:
-					int data_size = (int)arg3.value;
-					builder.AddDataAfter(data_name, data_size);
+					builder.AddDataAfter(data_name, (int)arg3.value);
 					break;
 				default: MewUserAssert(false, "DATA DA ? unsupported arg type");
 			}
@@ -468,7 +497,7 @@ namespace Virtual::Asm {
 		void puti(Token& arg1, size_t argc) {
 			MewUserAssert(argc == 1 && arg1.type == TokenType::RdiOffset, "not match arg count");
 			int offset = (int)arg1.value;
-			builder << Virtual::Instruction_PUTI << offset;
+			builder << Virtual::Instruction_PUTI << Virtual::Instruction_ST << offset;
 		}
 
 		void puts(Token& arg1, size_t argc) {
@@ -583,6 +612,12 @@ namespace Virtual::Asm {
 			builder.Jump(label_name); 
 		}
 
+		void _entry(Token& arg1, size_t argc) {
+			MewUserAssert(argc == 1 && arg1.type == TokenType::Text, "not match arg count");
+			const char* label_name = arg1.value;
+			this->entry_name = label_name;
+		}
+
 		void _je(Token& arg1, size_t argc) {
 			MewUserAssert(argc == 1 && arg1.type == TokenType::Text, "not match arg count");
 			const char* label_name = arg1.value;
@@ -619,19 +654,28 @@ namespace Virtual::Asm {
 			builder.JumpIfMore(label_name); 
 		}
 
+		void _mov(Token& arg1, Token& arg2, size_t argc) {
+			MewUserAssert(argc == 2 && arg1.type == TokenType::Text, "not match arg count");
+			builder << Virtual::Instruction_MOV;
+			WriteArgTypedLValue(arg1);
+			WriteArgTypedLValue(arg2);
+		}
+
+		void _swap(Token& arg1, Token& arg2, size_t argc) {
+			MewUserAssert(argc == 2 && arg1.type == TokenType::Text, "not match arg count");
+			builder << Virtual::Instruction_SWAP;
+			WriteArgTypedLValue(arg1);
+			WriteArgTypedLValue(arg2);
+		}
+
 		// todo nexts
-		void _mov(Token& arg1, size_t argc) {
-			MewNotImpl();
-		}
-		void _swap(Token& arg1, size_t argc) {
-			MewNotImpl();
-		}
 		void _mset(Token& arg1, size_t argc) {
 			MewNotImpl();
 		}
 
 		void compile() {
-			for (int i = 0; lexer.token_row.size(); ++i) {
+			builder.WaitEntry();
+			for (int i = 0; i < lexer.token_row.size(); ++i) {
 				auto& line = lexer.token_row[i];
 				if (line.size() == 0) { continue; }
 				size_t argc = line.size()-1;
@@ -644,6 +688,7 @@ namespace Virtual::Asm {
 							this->db_data(line[2], line[3], argc);
 						}
 					} break;
+					case TokenType::Entry: this->_entry(line[1], argc); break;
 					// movements
 					case TokenType::Ret: this->_ret(argc); break;
 					case TokenType::Jmp: this->_jmp(line[1], argc); break;
@@ -676,11 +721,18 @@ namespace Virtual::Asm {
 					case TokenType::And: this->_and(line[1], line[2], argc); break;
 					case TokenType::Ls: this->_ls(line[1], line[2], argc); break;
 					case TokenType::Rs: this->_rs(line[1], line[2], argc); break;
+					case TokenType::Mov: this->_mov(line[1], line[2], argc); break;
+					case TokenType::Swap: this->_swap(line[1], line[2], argc); break;
 					// todo nexts
 					default: MewUserAssert(false, "NOT ASSERTED TOKEN TYPE");
 				}
 			}
+			builder.CompleteEntry(this->entry_name);
 			// builder.MarkLabel();
+		}
+
+		Virtual::Code* gen_code() {
+			return code == nullptr ? code = builder.Build(): code;
 		}
 	};
 
@@ -700,15 +752,20 @@ namespace Virtual::Asm {
 			"L1:\n"
 			"	test \n"
 			"	jem LE1\n"
-			"	puti (rdi-4)\n"
-			"	inc (rdi-4)\n"
+			"	puti (rdi-8)\n"
+			"	inc (rdi-8)\n"
 			"	jmp L1\n"
 			"LE1:\n"
 			"	push 0\n"
 			"	ret\n";
 			Lexer lex(str);
 			Parser par(lex);
-			lex.print();
+			Compiler comp(lex);
+			// lex.print();
+			Code* code = comp.gen_code();
+			Virtual::Execute(*code);
+			Virtual::Code_SaveFromFile(*code, "./temp.nb");
+			Virtual::Execute("./temp.nb");
 		}
 	};
 }

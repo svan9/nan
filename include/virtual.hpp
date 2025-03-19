@@ -96,9 +96,9 @@ namespace Virtual {
   };
 
   struct VM_MANIFEST_FLAGS {
-    // bool __empty_byte: 1;
     bool has_debug: 1 = false;
-  };
+    byte ch[3];
+  }; // must be 4 byte;
 
   struct CodeDebugInfo {
     uint line;
@@ -139,29 +139,13 @@ namespace Virtual {
     MewAssert(file.is_open());
     file.seekp(std::ios::beg);
     /* version */
-    uint vv = (uint)VIRTUAL_VERSION;
-    file.write((const char*)(&vv), sizeof(uint));
-    /* lib procs */
-    uint code_proc_size = code.procs.size();
-    file.write((const char*)(&code_proc_size), sizeof(uint));
-    for (int i = 0; i < code_proc_size; i++) {
-      FuncInfo& info = code.procs.at((size_t)i);
-      file.write((const char*)(&info.idx),  sizeof(uint));
-      uint name_size = (uint)strlen(info.name);
-      file.write((const char*)(&name_size), sizeof(uint));
-      file.write(info.name, name_size);
-      file.write((const char*)(&info.calloffset), sizeof(uint));
-    }
-    /* code */
-    file << code.capacity;
-    for (int i = 0; i < code.capacity; i++) {
-      file << ((byte*)code.playground)[i];
-    }
-    /* data */
-    file << code.data_size;
-    for (int i = 0; i < code.data_size; i++) {
-      file << ((byte*)code.data)[i];
-    }
+    VM_MANIFEST_FLAGS mflags = code.cme.flags;
+    mew::writeBytes(file, (uint)VIRTUAL_VERSION);
+    mew::writeBytes(file, mflags, sizeof(uint));
+    mew::writeBytes(file, code.capacity, sizeof(uint));
+    mew::writeBytes(file, code.data_size, sizeof(uint));
+    mew::writeSeqBytes(file, code.playground, code.capacity);
+    mew::writeSeqBytes(file, code.data, code.data_size);
     file.close();
   }
 
@@ -461,6 +445,7 @@ namespace Virtual {
     switch (type) {
       case 0:
       case Instruction_FLT:
+      case Instruction_ST:
       case Instruction_NUM: {
         MewUserAssert(!vm.stack.empty(), "stack is empty");
         uint _top = vm.stack.top(vm.rdi);
@@ -730,7 +715,10 @@ namespace Virtual {
         int offset;
         memcpy(&offset, vm.begin, sizeof(int)); vm.begin += sizeof(int);
         VM_ARG arg;
-        arg.data = vm.stack.rat(-offset);
+        byte* num = vm.stack.rat(-offset);
+        int __num = *(int*)num;
+        (void)__num;
+        arg.data = num;
         arg.type = type;
         return arg;
       };
@@ -858,7 +846,7 @@ namespace Virtual {
   void VM_Jmp(VirtualMachine& vm) {
     vm.debug.last_fn = (char*)__func__;
     int offset;
-    memcpy(&offset, vm.begin, sizeof(int)); vm.begin += sizeof(int);
+    memcpy(&offset, vm.begin, sizeof(int)); //vm.begin += sizeof(int);
     MewUserAssert(MEW_IN_RANGE(vm.memory, vm.end, vm.begin+offset), 
       "out of memory");
     // vm.begin_stack.push(vm.begin);
@@ -987,13 +975,10 @@ namespace Virtual {
   
   void VM_Puti(VirtualMachine& vm) {
     vm.debug.last_fn = (char*)__func__;
-    uint offset;
-    memcpy(&offset, vm.begin, sizeof(uint)); vm.begin+=sizeof(uint);
-    vm.rdi += offset;
-    int x; VM_StackTop(vm, *vm.begin++, (uint*)&x);
-    vm.rdi -= offset;
+    auto x = VM_GetArg(vm);
+    int xi = x.getInt();
     char str[12] = {0};
-    mew::_itoa10(x, str);
+    mew::_itoa10(xi, str);
     fputs(str, vm.std_out);
   }
 
@@ -1234,6 +1219,11 @@ namespace Virtual {
     return Run(vm, code);
   }
 
+  int Execute(const char* path) {
+    Code* code = Code_LoadFromFile(path);
+    return Execute(*code);
+  }
+
   class VM_Async {
   public:
     struct ExecuteInfo {
@@ -1320,11 +1310,6 @@ namespace Virtual {
       return -1;
     }
   };
-  
-  int Execute(const char* path) {
-    Code* code = Code_LoadFromFile(path);
-    return Execute(*code);
-  }
 
   class CodeBuilder {
   public:
@@ -1353,82 +1338,90 @@ namespace Virtual {
       code = __temp_p;
       capacity += _size;
     }
-
+    
     void UpsizeIfNeeds(size_t needs_size) {
       if (size+needs_size > capacity) {
         Upsize(needs_size);
       }
     }
+        
+    void AddData(byte* row, size_t size) {
+      size_t __new_size = _data_size+size;
+      data = (byte*)realloc(data, __new_size);
+      memcpy(data+_data_size, row, size);
+      _data_size = __new_size;
+    }
     
-    friend CodeBuilder& operator+(CodeBuilder& cb, const CodeBuilder& i) {
-      size_t __size = i._data_size;
-      size_t __rsize = __size;
-      if (!cb.data) {
-        cb.data = new byte[__rsize];
-      } else {
-        byte* __new = new byte[cb._data_size+__rsize];
-        memcpy(__new, cb.data, cb._data_size);
-        byte* __old = cb.data; 
-        cb.data = __new;
-        free(__old);
-      }
-      memset(cb.data+cb._data_size, 0, __rsize);
-      memcpy(cb.data+cb._data_size, i.data, __rsize);
-      cb._data_size += __rsize;
-      return cb;
-    }
-    friend CodeBuilder& operator+(CodeBuilder& cb, const char* text) {
-      size_t __size = strlen(text);
-      size_t __rsize = (__size+1)*sizeof(char);
-      if (!cb.data) {
-        cb.data = new byte[__rsize];
-      } else {
-        byte* __new = new byte[cb._data_size+__rsize];
-        memcpy(__new, cb.data, cb._data_size);
-        byte* __old = cb.data; 
-        cb.data = __new;
-        free(__old);
-      }
-      memset(cb.data+(cb._data_size*sizeof(char)), 0, __rsize);
-      memcpy(cb.data+(cb._data_size*sizeof(char)), text, __rsize);
-      cb._data_size += __rsize;
-      return cb;
-    }
-    friend CodeBuilder& operator+(CodeBuilder& cb, const wchar_t* text) {
-      size_t __size = wcslen(text);
-      size_t __rsize = (__size+1)*sizeof(wchar_t);
-      if (!cb.data) {
-        cb.data = new byte[__rsize];
-      } else {
-        byte* __new = new byte[cb._data_size+__rsize];
-        memcpy(__new, cb.data, cb._data_size);
-        byte* __old = cb.data; 
-        cb.data = __new;
-        free(__old);
-      }
-      memset(cb.data+(cb._data_size*sizeof(wchar_t)), 0, __rsize);
-      memcpy(cb.data+(cb._data_size*sizeof(wchar_t)), text, __rsize);
-      cb._data_size += __rsize;
-      return cb;
-    }
+    // friend CodeBuilder& operator+(CodeBuilder& cb, const CodeBuilder& i) {
+    //   size_t __size = i._data_size;
+    //   size_t __rsize = __size;
+    //   if (!cb.data) {
+    //     cb.data = new byte[__rsize];
+    //   } else {
+    //     byte* __new = new byte[cb._data_size+__rsize];
+    //     memcpy(__new, cb.data, cb._data_size);
+    //     byte* __old = cb.data; 
+    //     cb.data = __new;
+    //     free(__old);
+    //   }
+    //   memset(cb.data+cb._data_size, 0, __rsize);
+    //   memcpy(cb.data+cb._data_size, i.data, __rsize);
+    //   cb._data_size += __rsize;
+    //   return cb;
+    // }
+    // friend CodeBuilder& operator+(CodeBuilder& cb, const char* text) {
+    //   size_t __size = strlen(text);
+    //   size_t __rsize = (__size+1)*sizeof(char);
+    //   if (!cb.data) {
+    //     cb.data = new byte[__rsize];
+    //   } else {
+    //     byte* __new = new byte[cb._data_size+__rsize];
+    //     memcpy(__new, cb.data, cb._data_size);
+    //     byte* __old = cb.data; 
+    //     cb.data = __new;
+    //     free(__old);
+    //   }
+    //   memset(cb.data+(cb._data_size*sizeof(char)), 0, __rsize);
+    //   memcpy(cb.data+(cb._data_size*sizeof(char)), text, __rsize);
+    //   cb._data_size += __rsize;
+    //   return cb;
+    // }
+    // friend CodeBuilder& operator+(CodeBuilder& cb, const wchar_t* text) {
+    //   size_t __size = wcslen(text);
+    //   size_t __rsize = (__size+1)*sizeof(wchar_t);
+    //   if (!cb.data) {
+    //     cb.data = new byte[__rsize];
+    //   } else {
+    //     byte* __new = new byte[cb._data_size+__rsize];
+    //     memcpy(__new, cb.data, cb._data_size);
+    //     byte* __old = cb.data; 
+    //     cb.data = __new;
+    //     free(__old);
+    //   }
+    //   memset(cb.data+(cb._data_size*sizeof(wchar_t)), 0, __rsize);
+    //   memcpy(cb.data+(cb._data_size*sizeof(wchar_t)), text, __rsize);
+    //   cb._data_size += __rsize;
+    //   return cb;
+    // }
 
-    CodeBuilder& operator+=(const wchar_t* text) {
-      return (*this)+text;
-    }
+    // CodeBuilder& operator+=(const wchar_t* text) {
+    //   return (*this)+text;
+    // }
     CodeBuilder& operator+=(const char* text) {
-      return (*this)+text;
+      AddData((byte*)text, strlen(text));
+      return *this;
     }
-    CodeBuilder& operator+=(CodeBuilder& i) {
-      return (*this)+i;
-    }
+    // CodeBuilder& operator+=(CodeBuilder& i) {
+    //   return (*this)+i;
+    // }
     
-    friend CodeBuilder& operator<<(CodeBuilder& cb, CodeBuilder& i) {
-      cb.Upsize(i.capacity);
-      memcpy(cb.code+cb.size, i.code, i.capacity);
-      cb.size += i.capacity;
-      cb += i;
-      return cb;
-    } 
+    // friend CodeBuilder& operator<<(CodeBuilder& cb, CodeBuilder& i) {
+    //   cb.Upsize(i.capacity);
+    //   memcpy(cb.code+cb.size, i.code, i.capacity);
+    //   cb.size += i.capacity;
+    //   cb += i;
+    //   return cb;
+    // } 
 
     friend CodeBuilder& operator<<(CodeBuilder& cb, byte i) {
       cb.UpsizeIfNeeds(sizeof(i));
@@ -1467,13 +1460,13 @@ namespace Virtual {
       return cb;
     }
 
-    friend CodeBuilder& operator>>(CodeBuilder& cb, CodeBuilder& i) {
-      cb.Upsize(i.capacity);
-      memcpy(cb.code+cb.size, i.code, i.capacity);
-      cb.size += i.capacity;
-      cb += i;
-      return cb;
-    }
+    // friend CodeBuilder& operator>>(CodeBuilder& cb, CodeBuilder& i) {
+    //   cb.Upsize(i.capacity);
+    //   memcpy(cb.code+cb.size, i.code, i.capacity);
+    //   cb.size += i.capacity;
+    //   cb += i;
+    //   return cb;
+    // }
 
     Code* operator*() {
       Code* c = new Code();
@@ -1520,7 +1513,7 @@ namespace Tests {
       builder << Instruction_PUTS;
       builder << 0U;
       builder << Instruction_EXIT;
-      builder += L"hellow word";
+      builder += "hellow word";
       Code* code = *builder;
       Code_SaveFromFile(*code, "./hellow_word.nb");
       // printf("[%u|%u]\n", code->capacity, code->data_size);
