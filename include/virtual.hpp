@@ -381,7 +381,7 @@ namespace Virtual {
 
   void VM_Push(VirtualMachine& vm) {
     vm.debug.last_fn = (char*)__func__;
-    byte head_byte = *vm.begin++;
+    Instruction head_byte = (Instruction)*vm.begin++;
     switch (head_byte) {
       case 0:
       case Instruction_FLT:

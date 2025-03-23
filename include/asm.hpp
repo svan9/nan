@@ -11,6 +11,29 @@
 namespace Virtual::Asm {
 	using namespace mew::utils;
 
+static const char* WriteReg_err_msg = 
+	"Undefined register type";
+static const char* WriteArgTyped_err_msg = 
+	"Unsupported rvalue type";
+static const char* WriteArgTypedLValue_err_msg = 
+	"Unsupported rvalue type, Allowed only [rdi_offset] & [register]";
+static const char* WriteArgTypedReg_err_msg = 
+	"Unsupported rvalue type, Allowed only [register]";
+static const char* db_data_err_msg = 
+	"Unsupported data before type, Allowed only [string]";
+static const char* da_data_err_msg = 
+	"Unsupported data after type, Allowed only [static_data_buffer]";
+static const char* puti_err_msg = 
+	"Wrong for arguments, Allowed only 1, `puti`";
+static const char* puts_err_msg = 
+	"Wrong for arguments, Allowed only 1, `puts`";
+static const char* push_err_msg = 
+	"Wrong for arguments, Allowed only 1, `push`";
+static const char* pop_err_msg = 
+	"Wrong for arguments, Allowed only 0, `pop`";
+
+#define GetErrMsg(func) func##_err_msg
+
 	enum struct TokenType: int {
 		// simple type
 		Undefined,
@@ -197,11 +220,13 @@ namespace Virtual::Asm {
 			// { "rdi", TokenType::Rdi},
 	};
 
-	struct DefaultTokenContext {
-		size_t char_idx;
-	};
-
+	
 	namespace Contexts {
+		struct DefaultTokenContext {
+			size_t line_idx;
+			DefaultTokenContext() {}
+			DefaultTokenContext(size_t line): line_idx(line) {}
+		};
 		struct Number: DefaultTokenContext {
 			size_t size;
 			Number(size_t size): size(size) {}
@@ -231,32 +256,42 @@ namespace Virtual::Asm {
 	struct Lexer {
 		mew::stack<mew::stack<Token>> token_row;
 		mew::stack<const char*> lines;
+		const char* file = "local";
+		const bool has_normal_err;
 
 		void _fill_simple() {
 			for (int i = 0; i < lines.size(); ++i) {
-				mew::stack<Token> line_tk;
+				mew::stack<Token> token_line;
 				const char* line = lines[i];
-				TokenRow tr(line);
+				TokenRow str_row(line);
 				const char* word;
-				while ((word = *tr++) != nullptr && *word != '\0') {
+				while ((word = *str_row++) != nullptr && *word != '\0') {
 					Token tk;
 					bool is_find = false;
 					for (auto it = tokens.begin(); it != tokens.end(); ++it) {
 						if (mew::strcmp(it->first, word)) {
 							tk.type = it->second;
-							line_tk.push(tk);
+							if (has_normal_err) {
+								tk.context = new Contexts::DefaultTokenContext(i);
+							}
+							token_line.push(tk);
 							is_find = true;
 							break;
 						}
 					}
 					if (!is_find) {
 						tk.type = TokenType::Undefined;
-						tk.value = word;
-						line_tk.push(tk);
+						if (has_normal_err) {
+							tk.context = new Contexts::DefaultTokenContext(i);
+						}
+						tk.value = scopy(word);
+						token_line.push(tk);
 					}
 				}
-				token_row.push(line_tk.copy());
+				token_row.push(token_line.copy());
+				// call ~token_row, ~token_line
 			}
+			lines.clear();
 		}
 
 		void _watch_token(Token& tk) {
@@ -265,7 +300,6 @@ namespace Virtual::Asm {
 				tk.value = strtrim(tk.value, strlen(tk.value)-1);
 				return;
 			} 
-			// line.insert(tk, idx);
 			bool is_number;
 			int i = str_to_int(tk.value, is_number);
 			if (is_number) {
@@ -276,14 +310,9 @@ namespace Virtual::Asm {
 			if (*tk.value == '"' && getLastChar(tk.value) == '"') {
 				tk.type = TokenType::String;
 				tk.context = new Contexts::String(strlen(tk.value)-2);
-				tk.value = str_parse(tk.value+1, strlen(tk.value)-2);
+				mew::utils::fas(tk.value, (const char*)str_parse(tk.value+1, strlen(tk.value)-2));
 				return;
 			}
-			/* 
-				todo parse & separate grammars in Token.value 
-				& insert in place of current
-			*/
-			
 			tk.type = TokenType::Text;
 		}
 
@@ -295,14 +324,27 @@ namespace Virtual::Asm {
 					if (e.type == TokenType::Undefined) {
 						_watch_token(e);
 					}
+					(void)e;
 				}
 			}
 		}
 
-		Lexer(const char* str) {
+		/*
+			split lines
+			| -> _fill_simple
+			| -> _decrypt_undefined
+			| 	| -> _watch_token
+			| 	|	label
+			| 	|	number
+			| 	|	string
+		*/
+		Lexer(const char* str, const char* file_name = "local", bool has_normal_err = false)
+			: has_normal_err(has_normal_err), file(file_name) 
+		{
+			std::vector<char> c;
+			c[1];
 			lines = *splitLines(str);
 			_fill_simple();
-			// print();
 			_decrypt_undefined();
 		}
 
@@ -337,7 +379,6 @@ namespace Virtual::Asm {
 		void parse() {
 			for (int x = 0; x < lexer.token_row.size(); ++x) {
 				auto& line = lexer.token_row[x];
-				// printf("[ ");
 				for (int y = 0; y < line.size(); ++y) {
 					auto& tk = line[y];
 					bool is_rdioffset = same_type_sequence(line, y, {
@@ -359,12 +400,9 @@ namespace Virtual::Asm {
 						line.erase(y+1, 2);
 					} else if (is_label) {
 						tk.type = TokenType::Label;
-						// tk.value = line[y].value;
 						line.erase(y+1);
 					}
-					// line[y].print();
 				}
-				// printf(" ]\n");
 				
 			}
 		}
@@ -377,8 +415,39 @@ namespace Virtual::Asm {
 	case TokenType::fx4: case TokenType::dx4: case TokenType::r4: case TokenType::rx4: \
 	case TokenType::fx5: case TokenType::dx5: case TokenType::r5: case TokenType::rx5 \
 
+	enum struct CompileOutFlags {
+		Clear, Warn, Error
+	};
+
 	using namespace ::Virtual::Lib;
 	struct Compiler {
+
+		Token* first = nullptr;
+		CompileOutFlags __cof = CompileOutFlags::Clear;
+
+		bool err_assert(bool expr, const char* msg) {
+			if (expr) { return false; }
+			if (lexer.has_normal_err && nonull(first)) {
+				size_t line = ((Contexts::DefaultTokenContext*)first->context)->line_idx+1;
+				printf("Error at (%s:%llu) %s\n", lexer.file, line, msg);
+			} else {
+				printf("Error: %s\n", msg);
+			}
+			__cof = CompileOutFlags::Error;
+			return true;
+		}
+		
+		void warn_assert(bool expr, const char* msg) {
+			if (!expr) { return; }
+			// todo fix
+			// if (nonull(first)) {
+			// 	size_t line = ((Contexts::DefaultTokenContext*)first->context)->line_idx+1;
+			// 	printf("Warn at (%s:%i):\n  %s\n", lexer.file, line, msg);
+			// } else {
+				printf("Warn: %s\n", msg);
+			// }
+			__cof = CompileOutFlags::Warn;
+		}
 		/*
 			todo for Compiler
 			[ ] store labels in code for nexts calling 
@@ -398,7 +467,7 @@ namespace Virtual::Asm {
 			compile();
 		}
 
-		void writeReg(TokenType& type) {
+		void WriteReg(TokenType& type) {
 			byte _rtype, _ridx;
 			switch(type) {
 				case TokenType::fx1: _ridx = 0;
@@ -425,7 +494,7 @@ namespace Virtual::Asm {
 				case TokenType::rx4: _ridx = 3;
 				case TokenType::rx5: _ridx = 4;
 					_rtype = (byte)Virtual::VM_RegType::FX; break;
-				default: MewUserAssert(false, "IS NOT A REGISTER LEXEM");
+				default: this->err_assert(false, GetErrMsg(WriteReg));
 			}
 			builder << _rtype << _ridx;
 		}
@@ -437,14 +506,15 @@ namespace Virtual::Asm {
 					builder << (uint)arg1.value;
 					break; 
 				case TokenType::RdiOffset: 
-					builder << Virtual::Instruction_ST; 
+					builder << Virtual::Instruction_ST;
+					this->warn_assert((int)arg1.value == 4, "rdi_offset points to last element of stack");
 					builder << (uint)arg1.value;
 					break;
 				case ALL_REG_CASE:
 					builder << Virtual::Instruction_REG; 
-					writeReg(arg1.type);
+					WriteReg(arg1.type);
 					break; 
-				default: MewUserAssert(false, "PUSH ? unsupported arg type");
+				default: this->err_assert(false, GetErrMsg(WriteArgTyped));
 			}
 		}
 
@@ -452,13 +522,14 @@ namespace Virtual::Asm {
 			switch(arg1.type) {
 				case TokenType::RdiOffset: 
 					builder << Virtual::Instruction_ST; 
+					this->warn_assert((int)arg1.value == 4, "rdi_offset points to last element of stack");
 					builder << (uint)arg1.value;
 					break;
 				case ALL_REG_CASE:
 					builder << Virtual::Instruction_REG; 
-					writeReg(arg1.type);
+					WriteReg(arg1.type);
 					break; 
-				default: MewUserAssert(false, "PUSH ? unsupported arg type");
+				default: this->err_assert(false, GetErrMsg(WriteArgTypedLValue));
 			}
 		}
 
@@ -466,203 +537,203 @@ namespace Virtual::Asm {
 			switch(arg1.type) {
 				case ALL_REG_CASE:
 					builder << Virtual::Instruction_REG; 
-					writeReg(arg1.type);
+					WriteReg(arg1.type);
 					break; 
-				default: MewUserAssert(false, "PUSH ? unsupported arg type");
+				default: this->err_assert(false, GetErrMsg(WriteArgTypedReg));
 			}
 		}
 
 		void db_data(Token& arg2, Token& arg3, size_t argc) {
-			MewUserAssert(argc == 3, "not match arg count");
+			if (this->err_assert(argc == 3, "not match arg count")) return;
 			const char* data_name = arg2.value;
 			switch (arg3.type) {
 				case TokenType::String:
 					builder.AddData(data_name, (byte*)arg3.value, ((Contexts::String*)arg3.context)->size);
 					break;
-				default: MewUserAssert(false, "DATA DB ? unsupported arg type");
+				default: this->err_assert(false, GetErrMsg(db_data));
 			}
 		}
 
 		void da_data(Token& arg2, Token& arg3, size_t argc) {
-			MewUserAssert(argc == 3, "not match arg count");
+			if (this->err_assert(argc == 3, "not match arg count")) return;
 			const char* data_name = arg2.value;
 			switch (arg3.type) {
 				case TokenType::DataSize:
 					builder.AddDataAfter(data_name, (int)arg3.value);
 					break;
-				default: MewUserAssert(false, "DATA DA ? unsupported arg type");
+				default: this->err_assert(false, GetErrMsg(da_data));
 			}
 		}
 
 		void puti(Token& arg1, size_t argc) {
-			MewUserAssert(argc == 1 && arg1.type == TokenType::RdiOffset, "not match arg count");
+			if (this->err_assert(argc == 1 && arg1.type == TokenType::RdiOffset, GetErrMsg(puti))) return;
 			int offset = (int)arg1.value;
 			builder << Virtual::Instruction_PUTI << Virtual::Instruction_ST << offset;
 		}
 
 		void puts(Token& arg1, size_t argc) {
-			MewUserAssert(argc == 1 && arg1.type == TokenType::Text, "not match arg count");
+			if (this->err_assert(argc == 1 && arg1.type == TokenType::Text, "not match arg count")) return;
 			const char* name = arg1.value;
 			builder.Puts(name);
 		}
 
 		void push(Token& arg1, size_t argc) {
-			MewUserAssert(argc == 1, "not match arg count");
+			if (this->err_assert(argc == 1, "not match arg count")) return;
 			builder << Virtual::Instruction_PUSH;
 			WriteArgTyped(arg1);
 		}
 		
-		void pop(size_t argc) {
-			MewUserAssert(argc == 0, "not match arg count");
+		void pop(size_t argc) { 
+			if (this->err_assert(argc == 0, "not match arg count")) return;
 			builder << Virtual::Instruction_POP;
 		}
 		
 		void rpop(Token& arg1, size_t argc) {
-			MewUserAssert(argc == 1, "not match arg count");
+			if (this->err_assert(argc == 1, "not match arg count")) return;
 			builder << Virtual::Instruction_RPOP;
 			WriteArgTypedReg(arg1);
 		}
 
 		void add(Token& arg1, Token& arg2, size_t argc) {
-			MewUserAssert(argc == 2, "not match arg count");
+			if (this->err_assert(argc == 2, "not match arg count")) return;
 			builder << Virtual::Instruction_ADD;
 			WriteArgTyped(arg1);
 			WriteArgTyped(arg2);
 		}
 
 		void sub(Token& arg1, Token& arg2, size_t argc) {
-			MewUserAssert(argc == 2, "not match arg count");
+			if (this->err_assert(argc == 2, "not match arg count")) return;
 			builder << Virtual::Instruction_SUB;
 			WriteArgTyped(arg1);
 			WriteArgTyped(arg2);
 		}
 		void mul(Token& arg1, Token& arg2, size_t argc) {
-			MewUserAssert(argc == 2, "not match arg count");
+			if (this->err_assert(argc == 2, "not match arg count")) return;
 			builder << Virtual::Instruction_MUL;
 			WriteArgTyped(arg1);
 			WriteArgTyped(arg2);
 		}
 		void div(Token& arg1, Token& arg2, size_t argc) {
-			MewUserAssert(argc == 2, "not match arg count");
+			if (this->err_assert(argc == 2, "not match arg count")) return;
 			builder << Virtual::Instruction_DIV;
 			WriteArgTyped(arg1);
 			WriteArgTyped(arg2);
 		}
 		void inc(Token& arg1, size_t argc) {
-			MewUserAssert(argc == 1 && arg1.type == TokenType::RdiOffset, "not match arg count or type");
+			if (this->err_assert(argc == 1 && arg1.type == TokenType::RdiOffset, "not match arg count or type")) return;
 			builder << Virtual::Instruction_INC;
 			WriteArgTyped(arg1);
 		}
 
 		void dec(Token& arg1, size_t argc) {
-			MewUserAssert(argc == 1 && arg1.type == TokenType::RdiOffset, "not match arg count or type");
+			if (this->err_assert(argc == 1 && arg1.type == TokenType::RdiOffset, "not match arg count or type")) return;
 			builder << Virtual::Instruction_DEC;
 			WriteArgTyped(arg1);
 		}
 		
 		void _xor(Token& arg1, Token& arg2, size_t argc) {
-			MewUserAssert(argc == 2, "not match arg count");
+			if (this->err_assert(argc == 2, "not match arg count")) return;
 			builder << Virtual::Instruction_XOR;
 			WriteArgTyped(arg1);
 			WriteArgTyped(arg2);
 		}
 
 		void _or(Token& arg1, Token& arg2, size_t argc) {
-			MewUserAssert(argc == 2, "not match arg count");
+			if (this->err_assert(argc == 2, "not match arg count")) return;
 			builder << Virtual::Instruction_OR;
 			WriteArgTyped(arg1);
 			WriteArgTyped(arg2);
 		}
 
 		void _and(Token& arg1, Token& arg2, size_t argc) {
-			MewUserAssert(argc == 2, "not match arg count");
+			if (this->err_assert(argc == 2, "not match arg count")) return;
 			builder << Virtual::Instruction_AND;
 			WriteArgTyped(arg1);
 			WriteArgTyped(arg2);
 		}
 
 		void _ls(Token& arg1, Token& arg2, size_t argc) {
-			MewUserAssert(argc == 2, "not match arg count");
+			if (this->err_assert(argc == 2, "not match arg count")) return;
 			builder << Virtual::Instruction_LS;
 			WriteArgTyped(arg1);
 			WriteArgTyped(arg2);
 		}
 
 		void _rs(Token& arg1, Token& arg2, size_t argc) {
-			MewUserAssert(argc == 2, "not match arg count");
+			if (this->err_assert(argc == 2, "not match arg count")) return;
 			builder << Virtual::Instruction_RS;
 			WriteArgTyped(arg1);
 			WriteArgTyped(arg2);
 		}
 
 		void _not(Token& arg1, size_t argc) {
-			MewUserAssert(argc == 1 && arg1.type == TokenType::RdiOffset, "not match arg count or type");
+			if (this->err_assert(argc == 1 && arg1.type == TokenType::RdiOffset, "not match arg count or type")) return;
 			builder << Virtual::Instruction_NOT;
 			WriteArgTyped(arg1);
 		}
 
 		void _ret(size_t argc) {
-			MewUserAssert(argc == 0, "not match arg count or type");
+			if (this->err_assert(argc == 0, "not match arg count or type")) return;
 			builder << Virtual::Instruction_RET;
 		}
 		
 		void _jmp(Token& arg1, size_t argc) {
-			MewUserAssert(argc == 1 && arg1.type == TokenType::Text, "not match arg count");
+			if (this->err_assert(argc == 1 && arg1.type == TokenType::Text, "not match arg count")) return;
 			const char* label_name = arg1.value;
 			builder.Jump(label_name); 
 		}
 
 		void _entry(Token& arg1, size_t argc) {
-			MewUserAssert(argc == 1 && arg1.type == TokenType::Text, "not match arg count");
+			if (this->err_assert(argc == 1 && arg1.type == TokenType::Text, "not match arg count")) return;
 			const char* label_name = arg1.value;
 			this->entry_name = label_name;
 		}
 
 		void _je(Token& arg1, size_t argc) {
-			MewUserAssert(argc == 1 && arg1.type == TokenType::Text, "not match arg count");
+			if (this->err_assert(argc == 1 && arg1.type == TokenType::Text, "not match arg count")) return;
 			const char* label_name = arg1.value;
 			builder.JumpIfEqual(label_name); 
 		}
 
 		void _jel(Token& arg1, size_t argc) {
-			MewUserAssert(argc == 1 && arg1.type == TokenType::Text, "not match arg count");
+			if (this->err_assert(argc == 1 && arg1.type == TokenType::Text, "not match arg count")) return;
 			const char* label_name = arg1.value;
 			builder.JumpIfEqualLess(label_name); 
 		}
 
 		void _jem(Token& arg1, size_t argc) {
-			MewUserAssert(argc == 1 && arg1.type == TokenType::Text, "not match arg count");
+			if (this->err_assert(argc == 1 && arg1.type == TokenType::Text, "not match arg count")) return;
 			const char* label_name = arg1.value;
 			builder.JumpIfEqualMore(label_name); 
 		}
 
 		void _jne(Token& arg1, size_t argc) {
-			MewUserAssert(argc == 1 && arg1.type == TokenType::Text, "not match arg count");
+			if (this->err_assert(argc == 1 && arg1.type == TokenType::Text, "not match arg count")) return;
 			const char* label_name = arg1.value;
 			builder.JumpIfNotEqual(label_name); 
 		}
 
 		void _jl(Token& arg1, size_t argc) {
-			MewUserAssert(argc == 1 && arg1.type == TokenType::Text, "not match arg count");
+			if (this->err_assert(argc == 1 && arg1.type == TokenType::Text, "not match arg count")) return;
 			const char* label_name = arg1.value;
 			builder.JumpIfLess(label_name); 
 		}
 
 		void _jm(Token& arg1, size_t argc) {
-			MewUserAssert(argc == 1 && arg1.type == TokenType::Text, "not match arg count");
+			if (this->err_assert(argc == 1 && arg1.type == TokenType::Text, "not match arg count")) return;
 			const char* label_name = arg1.value;
 			builder.JumpIfMore(label_name); 
 		}
 
 		void _mov(Token& arg1, Token& arg2, size_t argc) {
-			MewUserAssert(argc == 2 && arg1.type == TokenType::Text, "not match arg count");
+			if (this->err_assert(argc == 2 && arg1.type == TokenType::Text, "not match arg count")) return;
 			builder << Virtual::Instruction_MOV;
 			WriteArgTypedLValue(arg1);
 			WriteArgTypedLValue(arg2);
 		}
 
 		void _swap(Token& arg1, Token& arg2, size_t argc) {
-			MewUserAssert(argc == 2 && arg1.type == TokenType::Text, "not match arg count");
+			if (this->err_assert(argc == 2 && arg1.type == TokenType::Text, "not match arg count")) return;
 			builder << Virtual::Instruction_SWAP;
 			WriteArgTypedLValue(arg1);
 			WriteArgTypedLValue(arg2);
@@ -676,10 +747,12 @@ namespace Virtual::Asm {
 		void compile() {
 			builder.WaitEntry();
 			for (int i = 0; i < lexer.token_row.size(); ++i) {
+				if (__cof == CompileOutFlags::Error) return;
 				auto& line = lexer.token_row[i];
 				if (line.size() == 0) { continue; }
 				size_t argc = line.size()-1;
 				auto first = line[0];
+				this->first = &first;
 				switch (first.type) {
 					// data
 					case TokenType::Data: {
@@ -724,7 +797,7 @@ namespace Virtual::Asm {
 					case TokenType::Mov: this->_mov(line[1], line[2], argc); break;
 					case TokenType::Swap: this->_swap(line[1], line[2], argc); break;
 					// todo nexts
-					default: MewUserAssert(false, "NOT ASSERTED TOKEN TYPE");
+					default: this->err_assert(false, "NOT ASSERTED TOKEN TYPE");
 				}
 			}
 			builder.CompleteEntry(this->entry_name);
@@ -735,7 +808,17 @@ namespace Virtual::Asm {
 			return code == nullptr ? code = builder.Build(): code;
 		}
 	};
-
+	
+	CompileOutFlags compileFile(const char* _from, const char* _to) {
+		const char* _from_content = mew::ReadFullFile(_from);
+		constexpr bool has_normal_err = true;
+		Lexer lex(_from_content, _from, has_normal_err);
+		Parser par(lex);
+		Compiler comp(lex);
+		Code* code = comp.gen_code();
+		Virtual::Code_SaveFromFile(*code, _to);
+		return comp.__cof;
+	}
 
 	namespace Test {
 		void test_lexer(){
