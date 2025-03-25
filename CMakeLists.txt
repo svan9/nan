@@ -13,3 +13,10 @@ add_subdirectory(nanshell)
 add_subdirectory(vm)
 add_subdirectory(vma)
 add_subdirectory(vm-test)
+
+
+add_custom_target(copy_bin ALL
+	COMMAND ${CMAKE_COMMAND} -E copy_directory
+	${CMAKE_BINARY_DIR}/bin ${CMAKE_BINARY_DIR}/../build-win
+	COMMENT "Copying bin folder to build-win"
+)

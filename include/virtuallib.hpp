@@ -412,10 +412,11 @@ namespace Virtual::Lib {
     }
 
     ////////////////////////////////////////////////////////////
+    // todo find switch data ctx
     void Puts(std::string name) {
       MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
       auto range = _vars.at(name);
-      ((*this) << Instruction_PUTS << (uint)range.start);
+      ((*this) << Instruction_PUTS << (uint)range.start << (uint)0);
     }
 
     ////////////////////////////////////////////////////////////
@@ -775,6 +776,14 @@ namespace Virtual::Lib {
       Exit();
       actual_builder->force_data(_arena.size());
       Code* c = *(*actual_builder);
+      c->labels_size = _functions.size();
+      c->labels = new LabelInfo[c->labels_size];\
+      int i = 0;
+      for (auto it = _functions.begin(); it != _functions.end(); ++it, ++i) {
+        auto fn = *it;
+        c->labels[i].name = scopy(fn.first.c_str());
+        c->labels[i].cursor = fn.second;
+      }
       return c;
     }
   
@@ -796,30 +805,18 @@ namespace Virtual::Lib {
       return Code_LoadFromFile(path);
     }
   };
-}
+  
+  class Linker {
+  private:
+    Code* _M_main_code;
+  public:
+    Linker(Code* code): _M_main_code(code) {}
 
-namespace Tests {
-  // bool test_Virtual_Lib() {
-  //   try {
-  //     using namespace Virtual;
-  //     using namespace Virtual::Lib;
-  //     Builder b;
-  //     b.BeginFunction("main");
-  //     /* TEST 'for' */
-  //     b.BeginFunction("l1");
-  //     /* 'for (int i = 0; i < 10; i)' */
-  //     b.BeginForI("i", 0, 10);
-  //     /*{*/
-  //     /* */ b.Puti();
-  //     /*}*/
-  //     b.EndForI("i");
-  //     b.Save("./vlib-for-10.nb");
-  //     b.Run();
-  //   } catch (std::exception e) {
-  //     MewPrintError(e);
-  //     return false;
-  //   }
-  //   return true;
-  // }
+    static void LinkLibs(Code* code, std::initializer_list<const char*> libs) {
+      for (const char* lib: libs) {
+        code->cme.libs.push(lib);
+      }
+    }
+  };
 }
 #endif

@@ -83,13 +83,8 @@ namespace Virtual {
     Instruction_MOVRDI,
   };
 
-  #define VIRTUAL_VERSION (Instruction_PUTS*100)+0x34
+  #define VIRTUAL_VERSION (Instruction_PUTS*100)+0x49
 
-  struct FuncInfo {
-    uint idx;
-    const char* name;
-    uint calloffset;
-  };
 
   struct CodeManifest {
     // std::map<const char*, FuncInfo> procs;
@@ -106,10 +101,23 @@ namespace Virtual {
     uint cursor;
   };
 
+  struct FuncInfo {
+    uint code_idx;
+    const char* name;
+    uint calloffset;
+  };
+  
   struct CodeManifestExtended {
     VM_MANIFEST_FLAGS flags;
     size_t size;
     mew::stack<CodeDebugInfo> debug;
+    mew::stack<const char*> libs;
+    mew::stack<FuncInfo, 8U> procs;
+  };
+  
+  struct LabelInfo {
+    const char* name;
+    size_t cursor;
   };
 
   struct Code {
@@ -117,8 +125,18 @@ namespace Virtual {
     Instruction* playground;
     size_t data_size = 0;
     byte* data = nullptr;
-    mew::stack<FuncInfo, 8U> procs;
+    size_t labels_size = 0;
+    LabelInfo* labels;
     CodeManifestExtended cme;
+
+    size_t find_label(const char* name) {
+      for (int i = 0; i < labels_size; i++) {
+        if (mew::strcmp(labels[i].name, name)) {
+          return labels[i].cursor;
+        }
+      }
+      return -1;
+    }
   };
 
   struct CodeExtended {
@@ -144,8 +162,12 @@ namespace Virtual {
     mew::writeBytes(file, mflags, sizeof(uint));
     mew::writeBytes(file, code.capacity, sizeof(uint));
     mew::writeBytes(file, code.data_size, sizeof(uint));
+    mew::writeBytes(file, code.labels_size, sizeof(uint));
+    mew::writeBytes(file, code.cme.libs.size(), sizeof(uint));
     mew::writeSeqBytes(file, code.playground, code.capacity);
     mew::writeSeqBytes(file, code.data, code.data_size);
+    mew::writeSeqBytes(file, code.labels, code.labels_size);
+    mew::writeSeqBytes(file, code.cme.libs.begin(), code.cme.libs.size());
     file.close();
   }
 
@@ -174,6 +196,8 @@ namespace Virtual {
     code->capacity = mew::readInt4Bytes(file);
     code->data_size = mew::readInt4Bytes(file);
     code->cme.flags = mflags;
+    code->labels_size = mew::readInt4Bytes(file);
+    uint libs_size = mew::readInt4Bytes(file);
     /* code */
     code->playground = new Instruction[code->capacity];
     for (int i = 0; i < code->capacity; i++) {
@@ -190,6 +214,15 @@ namespace Virtual {
         CodeDebugInfo di; mew::readBytes(file, di);
         code->cme.debug.push(di);
       }
+    }
+    code->labels = new LabelInfo[code->labels_size];
+    for (int i = 0; i < code->labels_size; i++) {
+      LabelInfo li; mew::readBytes(file, li);
+      code->labels[i] = li;
+    }
+    for (int i = 0; i < libs_size; i++) {
+      const char* lib; mew::readBytes(file, lib);
+      code->cme.libs.push(lib);
     }
     file.close();
     return code;
@@ -263,6 +296,7 @@ namespace Virtual {
     struct Flags {
       byte heap_lock_execute: 1 = 1;
       byte use_debug: 1 = 0;
+      byte in_neib_ctx: 1 = false;
     } flags;                                    // 1byte
     byte _pad0[1];
     mew::stack<uint, 8U> stack;                 // 24byte
@@ -271,6 +305,7 @@ namespace Virtual {
     mew::stack<mew::_dll_hinstance, 8U> hdlls;  // 24byte
     mew::stack<mew::_dll_farproc, 8U> hprocs;   // 24byte
     mew::stack<FuncInfo, 8U> procs;             // 24byte
+    mew::stack<Code*, 8U> libs;                 // 24byte
     size_t process_cycle = 0;
 
     byte* getRegister(VM_RegType rt, byte idx, size_t* size = nullptr) {
@@ -335,12 +370,9 @@ namespace Virtual {
 
   void LoadMemory(VirtualMachine& vm, Code& code) {
     vm.memory = (byte*)code.playground;
-    vm.procs = code.procs;
-    /* load extern functions */
-    for (int i = 0; i < code.procs.size(); ++i) {
-      FuncInfo& info = code.procs.at(i);
-      mew::_dll_farproc proc = mew::GetFunction(vm.hdlls.at((size_t)info.idx), info.name);
-      vm.hprocs.pushIfNotExists(proc);
+    for (int i = 0; i < code.cme.libs.size(); ++i) {
+      Code* lib = Code_LoadFromFile(code.cme.libs.at(i));
+      vm.libs.push(lib);
     }
   }
 
@@ -465,22 +497,29 @@ namespace Virtual {
 
       default: MewNot(); break;
     }
-    // if (vm.rdi == 0) {
-    //   vm.stack.pop();
-    // }
   }
 
-  void VM_ManualCall(VirtualMachine& vm, int offset) {
-    MewUserAssert(MEW_IN_RANGE(vm.memory, vm.end, vm.begin+offset), 
-      "out of memory");
+  void VM_SwitchContext(VirtualMachine& vm, Code* code) {
+    vm.flags.in_neib_ctx = true;
+  }
+
+  void VM_ManualCall(VirtualMachine& vm, int libIDX, const char* fname) {
+    Code* lib = vm.libs.at(libIDX);
+    size_t offset = lib->find_label(fname);
+    MewUserAssert(offset != -1, "undefined function");
     vm.begin_stack.push(vm.begin);
-    vm.begin += offset;
+    vm.begin = (byte*)lib->playground+offset;
+    VM_SwitchContext(vm, lib);
   }
 
   void VM_Call(VirtualMachine& vm) {
-    int offset; 
-    memcpy(&offset, vm.begin, sizeof(int));
-    VM_ManualCall(vm, offset);
+    int lib_idx;
+    memcpy(&lib_idx, vm.begin, sizeof(int)); vm.begin += sizeof(int);
+    Code* lib = vm.libs.at(lib_idx);
+    size_t flen = strlen((const char*)vm.begin);
+    char* fname = new char[flen+1];
+    memcpy(fname, vm.begin, flen+1); vm.begin += flen+1;
+    VM_ManualCall(vm, lib_idx, fname);
   }
 
   void VM_MathBase(VirtualMachine& vm, uint* x, uint* y, byte** mem = nullptr) {
@@ -986,6 +1025,14 @@ namespace Virtual {
     vm.debug.last_fn = (char*)__func__;
     uint offset;
     memcpy(&offset, vm.begin, sizeof(uint)); vm.begin+=sizeof(uint);
+    uint fls;
+    memcpy(&fls, vm.begin, sizeof(uint)); vm.begin+=sizeof(uint);
+    byte* heap;
+    if (fls == 0) {
+      heap = vm.heap;
+    } else {
+      heap = vm.libs.at((size_t)(fls-1))->data;
+    }
     MewUserAssert(vm.heap+offset < vm.end, "out of memory");
     byte* pointer = vm.heap+offset;
     char* begin = (char*)pointer;
@@ -1186,21 +1233,7 @@ namespace Virtual {
       memcpy(vm.heap, code.data, code.data_size*sizeof(*code.data));
     }
     while (vm.begin < vm.end && vm.status != VM_Status_Ret) {
-      ++vm.process_cycle;
-      // try {
-        RunLine(vm);
-      // } catch(std::exception& e) {
-      //   if (vm.flags.use_debug) {
-      //     size_t cursor = vm.capacity - (size_t)(vm.end-vm.begin);
-      //     for (int i = 0; i < code.cme.debug.size(); ++i) {
-      //       if (code.cme.debug[i].cursor >= cursor) {
-      //         printf("\n[DEBUG_ERROR] at (%i) in (%s)\n", code.cme.debug[i].line, vm.debug.last_fn);
-      //         break;
-      //       }
-      //     }
-      //   }
-      //   throw e;
-      // }
+      ++vm.process_cycle; RunLine(vm);
     }
     vm.status = VM_Status_Panding;
     return vm.stack.top();

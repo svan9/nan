@@ -26,6 +26,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   target_compile_definitions(${PROJECT_NAME} PUBLIC "WINDOWS_OS")
+
+
 endif()
 
 install(TARGETS ${PROJECT_NAME})

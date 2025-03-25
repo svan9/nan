@@ -1,0 +1,18 @@
+entry __start
+
+data db hellow "Hellow, world\n\0"
+data da space[1000]
+
+__start:
+	puts hellow
+	push 0
+	push 10
+L1:
+	test 
+	jem LE1
+	puti (rdi-8)
+	inc (rdi-8)
+	jmp L1
+LE1:
+	push 0
+	ret
