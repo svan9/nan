@@ -2,7 +2,9 @@
 //      file 'allocator.nan'      //
 ////////////////////////////////////
 
-expand class std; 
+concept _c<T> = 
+
+expand class std;
 expand class Allocator<T>;
 
 struct {

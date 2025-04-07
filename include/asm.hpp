@@ -13,7 +13,7 @@ namespace Virtual::Asm {
 
 static const char* WriteReg_err_msg = 
 	"Undefined register type";
-static const char* WriteArgTyped_err_msg = 
+static const char* WriteArgTypedRValue_err_msg = 
 	"Unsupported rvalue type";
 static const char* WriteArgTypedLValue_err_msg = 
 	"Unsupported rvalue type, Allowed only [rdi_offset] & [register]";
@@ -38,7 +38,7 @@ static const char* pop_err_msg =
 		// simple type
 		Undefined,
 		None, String, Number, Text,	Colon,  Label,
-		Data, DB, DA, Entry,
+		Data, DB, DA, Entry, 
 		// operators
 		Minus, Plus, Equal, Multiply, Divide,
 		// Brackets
@@ -51,7 +51,7 @@ static const char* pop_err_msg =
 		rx2, rx3, rx4, rx5,
 		Rdi,
 		// commands
-		Call, Push, Pop, Rpop, Add, Sub, Mul, Div, Inc, Dec, Xor, Or, 
+		LM, Call, Push, Pop, Rpop, Add, Sub, Mul, Div, Inc, Dec, Xor, Or, 
 		Not, And, Ls, Rs, Jmp, Ret, Exit, Test, Je, Jel, Jem, Jne, Jl,
 		Jm, Mov, Swap, Mset, Swst, Write, Read, Open, Putc, Puti, Puts, 
 		Getch, Movrdi,
@@ -140,6 +140,7 @@ static const char* pop_err_msg =
 			case TokenType::Getch: return "Getch";
 			case TokenType::Movrdi: return "Movrdi";
 			case TokenType::DataSize: return "DataSize";
+			case TokenType::LM: return "LM";
 			default: return nullptr;
 		}
 	}
@@ -217,6 +218,7 @@ static const char* pop_err_msg =
 			{ "puts", TokenType::Puts},
 			{ "getch", TokenType::Getch},
 			{ "movrdi", TokenType::Movrdi},
+			{ "lm", TokenType::LM},
 			// { "rdi", TokenType::Rdi},
 	};
 
@@ -254,7 +256,9 @@ static const char* pop_err_msg =
 	};
 	
 	struct Lexer {
-		mew::stack<mew::stack<Token>> token_row;
+		typedef mew::stack<Token> tokens_t;
+		typedef mew::stack<tokens_t> token_row_t;
+		token_row_t token_row;
 		mew::stack<const char*> lines;
 		const char* file = "local";
 		const bool has_normal_err;
@@ -265,7 +269,8 @@ static const char* pop_err_msg =
 				const char* line = lines[i];
 				TokenRow str_row(line);
 				const char* word;
-				while ((word = *str_row++) != nullptr && *word != '\0') {
+				bool is_comment = false;
+				while ((word = *str_row++) != nullptr && *word != '\0' && !(is_comment = mew::strcmp(word, ";"))) {
 					Token tk;
 					bool is_find = false;
 					for (auto it = tokens.begin(); it != tokens.end(); ++it) {
@@ -288,7 +293,13 @@ static const char* pop_err_msg =
 						token_line.push(tk);
 					}
 				}
+				if (token_line.size() == 0) {
+					continue;
+				}
 				token_row.push(token_line.copy());
+				if (is_comment) {
+					continue;
+				}
 				// call ~token_row, ~token_line
 			}
 			lines.clear();
@@ -348,6 +359,10 @@ static const char* pop_err_msg =
 			_decrypt_undefined();
 		}
 
+		Lexer(token_row_t tk, const char* file_name = "local", bool has_normal_err = true)
+			: has_normal_err(has_normal_err), file(file_name), token_row(tk)
+		{ }
+
 		void print() {
 			for (int x = 0; x < token_row.size(); ++x) {
 				auto& line = token_row[x];
@@ -377,9 +392,13 @@ static const char* pop_err_msg =
 		}
 
 		void parse() {
-			for (int x = 0; x < lexer.token_row.size(); ++x) {
+			int x, y;
+			#pragma omp parallel for \
+				default(shared) private(x, y) \
+				schedule(static, 4)
+			for (x = 0; x < lexer.token_row.size(); ++x) {
 				auto& line = lexer.token_row[x];
-				for (int y = 0; y < line.size(); ++y) {
+				for (y = 0; y < line.size(); ++y) {
 					auto& tk = line[y];
 					bool is_rdioffset = same_type_sequence(line, y, {
 						TokenType::RoundOpenBracket, TokenType::Text, TokenType::Minus, TokenType::Number, TokenType::RoundCloseBracket
@@ -499,7 +518,7 @@ static const char* pop_err_msg =
 			builder << _rtype << _ridx;
 		}
 
-		void WriteArgTyped(Token& arg1) {
+		void WriteArgTypedRValue(Token& arg1) {
 			switch(arg1.type) {
 				case TokenType::Number: 
 					builder << Virtual::Instruction_NUM; 
@@ -514,7 +533,7 @@ static const char* pop_err_msg =
 					builder << Virtual::Instruction_REG; 
 					WriteReg(arg1.type);
 					break; 
-				default: this->err_assert(false, GetErrMsg(WriteArgTyped));
+				default: this->err_assert(false, GetErrMsg(WriteArgTypedRValue));
 			}
 		}
 
@@ -544,7 +563,7 @@ static const char* pop_err_msg =
 		}
 
 		void db_data(Token& arg2, Token& arg3, size_t argc) {
-			if (this->err_assert(argc == 3, "not match arg count")) return;
+			if (this->err_assert(argc == 2, "not match arg count")) return;
 			const char* data_name = arg2.value;
 			switch (arg3.type) {
 				case TokenType::String:
@@ -555,7 +574,7 @@ static const char* pop_err_msg =
 		}
 
 		void da_data(Token& arg2, Token& arg3, size_t argc) {
-			if (this->err_assert(argc == 3, "not match arg count")) return;
+			if (this->err_assert(argc == 2, "not match arg count")) return;
 			const char* data_name = arg2.value;
 			switch (arg3.type) {
 				case TokenType::DataSize:
@@ -580,7 +599,18 @@ static const char* pop_err_msg =
 		void push(Token& arg1, size_t argc) {
 			if (this->err_assert(argc == 1, "not match arg count")) return;
 			builder << Virtual::Instruction_PUSH;
-			WriteArgTyped(arg1);
+			if (arg1.type == TokenType::Text) {
+				builder.PushDataOffset(arg1.value);
+			} else {
+				WriteArgTypedRValue(arg1);
+			}
+		}
+
+		void _lm(Token& arg1, Token& arg2, size_t argc) {
+			if (this->err_assert(argc == 2, "not match arg count")) return;
+			builder << Virtual::Instruction_LM;
+			WriteArgTypedLValue(arg1);
+			WriteArgTypedRValue(arg2);
 		}
 		
 		void pop(size_t argc) { 
@@ -597,79 +627,79 @@ static const char* pop_err_msg =
 		void add(Token& arg1, Token& arg2, size_t argc) {
 			if (this->err_assert(argc == 2, "not match arg count")) return;
 			builder << Virtual::Instruction_ADD;
-			WriteArgTyped(arg1);
-			WriteArgTyped(arg2);
+			WriteArgTypedRValue(arg1);
+			WriteArgTypedRValue(arg2);
 		}
 
 		void sub(Token& arg1, Token& arg2, size_t argc) {
 			if (this->err_assert(argc == 2, "not match arg count")) return;
 			builder << Virtual::Instruction_SUB;
-			WriteArgTyped(arg1);
-			WriteArgTyped(arg2);
+			WriteArgTypedRValue(arg1);
+			WriteArgTypedRValue(arg2);
 		}
 		void mul(Token& arg1, Token& arg2, size_t argc) {
 			if (this->err_assert(argc == 2, "not match arg count")) return;
 			builder << Virtual::Instruction_MUL;
-			WriteArgTyped(arg1);
-			WriteArgTyped(arg2);
+			WriteArgTypedRValue(arg1);
+			WriteArgTypedRValue(arg2);
 		}
 		void div(Token& arg1, Token& arg2, size_t argc) {
 			if (this->err_assert(argc == 2, "not match arg count")) return;
 			builder << Virtual::Instruction_DIV;
-			WriteArgTyped(arg1);
-			WriteArgTyped(arg2);
+			WriteArgTypedRValue(arg1);
+			WriteArgTypedRValue(arg2);
 		}
 		void inc(Token& arg1, size_t argc) {
 			if (this->err_assert(argc == 1 && arg1.type == TokenType::RdiOffset, "not match arg count or type")) return;
 			builder << Virtual::Instruction_INC;
-			WriteArgTyped(arg1);
+			WriteArgTypedRValue(arg1);
 		}
 
 		void dec(Token& arg1, size_t argc) {
 			if (this->err_assert(argc == 1 && arg1.type == TokenType::RdiOffset, "not match arg count or type")) return;
 			builder << Virtual::Instruction_DEC;
-			WriteArgTyped(arg1);
+			WriteArgTypedRValue(arg1);
 		}
 		
 		void _xor(Token& arg1, Token& arg2, size_t argc) {
 			if (this->err_assert(argc == 2, "not match arg count")) return;
 			builder << Virtual::Instruction_XOR;
-			WriteArgTyped(arg1);
-			WriteArgTyped(arg2);
+			WriteArgTypedRValue(arg1);
+			WriteArgTypedRValue(arg2);
 		}
 
 		void _or(Token& arg1, Token& arg2, size_t argc) {
 			if (this->err_assert(argc == 2, "not match arg count")) return;
 			builder << Virtual::Instruction_OR;
-			WriteArgTyped(arg1);
-			WriteArgTyped(arg2);
+			WriteArgTypedRValue(arg1);
+			WriteArgTypedRValue(arg2);
 		}
 
 		void _and(Token& arg1, Token& arg2, size_t argc) {
 			if (this->err_assert(argc == 2, "not match arg count")) return;
 			builder << Virtual::Instruction_AND;
-			WriteArgTyped(arg1);
-			WriteArgTyped(arg2);
+			WriteArgTypedRValue(arg1);
+			WriteArgTypedRValue(arg2);
 		}
 
 		void _ls(Token& arg1, Token& arg2, size_t argc) {
 			if (this->err_assert(argc == 2, "not match arg count")) return;
 			builder << Virtual::Instruction_LS;
-			WriteArgTyped(arg1);
-			WriteArgTyped(arg2);
+			WriteArgTypedRValue(arg1);
+			WriteArgTypedRValue(arg2);
 		}
 
 		void _rs(Token& arg1, Token& arg2, size_t argc) {
 			if (this->err_assert(argc == 2, "not match arg count")) return;
 			builder << Virtual::Instruction_RS;
-			WriteArgTyped(arg1);
-			WriteArgTyped(arg2);
+			WriteArgTypedRValue(arg1);
+			WriteArgTypedRValue(arg2);
 		}
 
 		void _not(Token& arg1, size_t argc) {
 			if (this->err_assert(argc == 1 && arg1.type == TokenType::RdiOffset, "not match arg count or type")) return;
 			builder << Virtual::Instruction_NOT;
-			WriteArgTyped(arg1);
+			WriteArgTypedRValue(arg1);
 		}
 
 		void _ret(size_t argc) {
@@ -729,7 +759,7 @@ static const char* pop_err_msg =
 			if (this->err_assert(argc == 2 && arg1.type == TokenType::Text, "not match arg count")) return;
 			builder << Virtual::Instruction_MOV;
 			WriteArgTypedLValue(arg1);
-			WriteArgTypedLValue(arg2);
+			WriteArgTypedRValue(arg2);
 		}
 
 		void _swap(Token& arg1, Token& arg2, size_t argc) {
@@ -737,6 +767,12 @@ static const char* pop_err_msg =
 			builder << Virtual::Instruction_SWAP;
 			WriteArgTypedLValue(arg1);
 			WriteArgTypedLValue(arg2);
+		}
+
+		void _getch(Token& arg1, size_t argc) {
+			if (this->err_assert(argc == 1 && arg1.type == TokenType::Text, "not match arg count")) return;
+			builder << Virtual::Instruction_GETCH;
+			WriteArgTypedLValue(arg1);
 		}
 
 		// todo nexts
@@ -759,6 +795,9 @@ static const char* pop_err_msg =
 						auto& arg1 = line[1];
 						if (arg1.type == TokenType::DB) {
 							this->db_data(line[2], line[3], argc);
+						}else
+						if (arg1.type == TokenType::DA) {
+							this->da_data(line[2], line[3], argc);
 						}
 					} break;
 					case TokenType::Entry: this->_entry(line[1], argc); break;
@@ -796,6 +835,8 @@ static const char* pop_err_msg =
 					case TokenType::Rs: this->_rs(line[1], line[2], argc); break;
 					case TokenType::Mov: this->_mov(line[1], line[2], argc); break;
 					case TokenType::Swap: this->_swap(line[1], line[2], argc); break;
+					case TokenType::Getch: this->_getch(line[1], argc); break;
+					case TokenType::LM: this->_lm(line[1],line[2], argc); break;
 					// todo nexts
 					default: this->err_assert(false, "NOT ASSERTED TOKEN TYPE");
 				}

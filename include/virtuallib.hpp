@@ -288,10 +288,12 @@ namespace Virtual::Lib {
     std::map<std::string, size_t> _functions;
     std::map<std::string, VM_Processor> _externs_functions;
     std::map<std::string, Arena::Range> _vars;
+    std::map<std::string, Arena::Range> _adatas;
     std::map<std::string, uint> _wait_labels;
     mew::stack<uint> _deferred_calc;
     mew::stack<int> _stored_points;
     Arena _arena;
+    Arena _aarena;
     size_t jte = -1;
   public:
     ////////////////////////////////////////////////////////////
@@ -398,9 +400,19 @@ namespace Virtual::Lib {
     }
 
     ////////////////////////////////////////////////////////////
+    Arena::Range find_var(std::string name) {
+      auto _v = _vars.find(name);
+      if (_v != _vars.end()) {
+        auto f_ = _adatas.find(name);
+        MewUserAssert(f_ != _adatas.end(), "undefined");
+        return f_->second;
+      }
+      return _v->second;
+    }
+
+    ////////////////////////////////////////////////////////////
     void Add(std::string name, uint num) {
-      MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
-      auto range = _vars.at(name);
+      auto range = find_var(name);
       ((*this) << Instruction_PUSH << Instruction_NUM << num);
       ((*this) << Instruction_PUSH << Instruction_REG << (uint)range.start);
       ((*this) << Instruction_ADD  << Instruction_MEM << Instruction_NUM);
@@ -414,8 +426,7 @@ namespace Virtual::Lib {
     ////////////////////////////////////////////////////////////
     // todo find switch data ctx
     void Puts(std::string name) {
-      MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
-      auto range = _vars.at(name);
+      auto range = find_var(name);
       ((*this) << Instruction_PUTS << (uint)range.start << (uint)0);
     }
 
@@ -426,8 +437,7 @@ namespace Virtual::Lib {
 
     ////////////////////////////////////////////////////////////
     void Sub(std::string name, uint num) {
-      MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
-      auto range = _vars.at(name);
+      auto range = find_var(name);
       ((*this) << Instruction_PUSH << Instruction_REG << (uint)range.start);
       ((*this) << Instruction_PUSH << Instruction_NUM << num);
       ((*this) << Instruction_SUB  << Instruction_REG << Instruction_NUM);
@@ -529,8 +539,7 @@ namespace Virtual::Lib {
 
     ////////////////////////////////////////////////////////////
     void Test(std::string name, int value) {
-      MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
-      auto range = _vars.at(name);
+      auto range = find_var(name);
       Push(Instruction_NUM, value); /* y */
       Push(Instruction_MEM, (uint)range.start); /* x */
       Test(Instruction_MEM, Instruction_NUM);
@@ -572,8 +581,7 @@ namespace Virtual::Lib {
     
     ////////////////////////////////////////////////////////////
     void Dec(std::string name) {
-      MewUserAssert(_vars.find(name) != _vars.end(), "undefined");
-      auto range = _vars.at(name);
+      auto range = find_var(name);
       ((*this) << Instruction_PUSH << Instruction_REG << (uint)range.start);
       ((*this) << Instruction_DEC  << Instruction_MEM);
     }
@@ -597,9 +605,14 @@ namespace Virtual::Lib {
 
     ////////////////////////////////////////////////////////////
     void Push(std::string varname) {
-      MewUserAssert(_vars.find(varname) != _vars.end(), "undefined");
-      auto range = _vars.at(varname);
+      auto range = find_var(varname);
       ((*this) << Instruction_PUSH << Instruction_REG << (uint)range.start);
+    }
+    
+    ////////////////////////////////////////////////////////////
+    void PushDataOffset(std::string varname) {
+      auto range = find_var(varname);
+      ((*this) << (uint)range.start);
     }
 
     ////////////////////////////////////////////////////////////
@@ -754,14 +767,13 @@ namespace Virtual::Lib {
       (*actual_builder).AddData(row, size);
       return *this;
     }
-
+    
     ////////////////////////////////////////////////////////////
     Builder& AddDataAfter(std::string name, size_t size) {
-      MewNotImpl();
-      // size_t length = strlen(text)+1;
-      // Assign(name, length);
-      // (*actual_builder) += text;
-      // return *this;
+      (*actual_builder).push_adata(size);
+      auto range = _aarena.Alloc(size);
+      _adatas.insert({name, range});
+      return *this;
     }
 
     ////////////////////////////////////////////////////////////

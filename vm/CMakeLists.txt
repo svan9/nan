@@ -9,14 +9,18 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_compile_options(-fconcepts)
 add_compile_options(-fpermissive)
+add_compile_options(-fopenmp)
 
 aux_source_directory("./" SOURCE)
 add_executable(${PROJECT_NAME} ${SOURCE})
 target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_SOURCE_DIR}/include")
 set_target_properties(${PROJECT_NAME} PROPERTIES COMMON_LANGUAGE_RUNTIME "")
-if(RELEASE) 
-  target_link_libraries(${PROJECT_NAME} -static-libgcc -static-libstdc++ -O3 -static -pthread)	
-endif()
+find_package(OpenMP)
+
+# if(OpenMP_CXX_FOUND AND RELEASE)
+  target_link_libraries(${PROJECT_NAME} PUBLIC OpenMP::OpenMP_CXX -static-libgcc -static-libstdc++ -O3 -static -pthread)
+# endif()
+
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_compile_definitions(${PROJECT_NAME} PUBLIC "LINUX_OS")

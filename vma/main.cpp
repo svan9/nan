@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "virtual.hpp"
-#include "asm.hpp"
+#include "nan.hpp"
 #define HELP_PAGE \
 	"Usage:\n" \
 	"> ./nanvm <path/to/file>\n" \

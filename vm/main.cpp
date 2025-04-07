@@ -2,7 +2,7 @@
 #include <iostream>
 #include "mewall.h"
 #include "virtual.hpp"
-#include "nanasm.hpp"
+#include "nan.hpp"
 #if defined(_WIN32)
 
 #include <windows.h>

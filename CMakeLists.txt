@@ -9,10 +9,14 @@ set(CMAKE_CXX_FLAGS_RELEASE "-Ofast")
 include_directories("${CMAKE_SOURCE_DIR}/mewlib")
 configure_file("${CMAKE_SOURCE_DIR}/mewlib/mew.natvis" "${CMAKE_BINARY_DIR}/mew.natvis" COPYONLY)
 
+add_subdirectory(zlib)
+# add_subdirectory(libzip)
 add_subdirectory(nanshell)
 add_subdirectory(vm)
 add_subdirectory(vma)
 add_subdirectory(vm-test)
+add_subdirectory(opt-test)
+add_subdirectory(opt-m)
 
 
 add_custom_target(copy_bin ALL

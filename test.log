@@ -1,0 +1,60 @@
+-------test log-------
+cpp:   4.04  by 100 tests
+nanvm: 24.15 by 100 tests
+py:    69.82 by 100 tests
+js:    35.78 by 100 tests
+-------test log-------
+cpp:   4.16  by 100 tests
+nanvm: 22.24 by 100 tests
+py:    67.47 by 100 tests
+js:    35.34 by 100 tests
+-------test log-------
+cpp: 4.04 by 100 tests
+nanvm: 20.6 by 100 tests
+py: 67.22 by 100 tests
+js: 34.92 by 100 tests
+-------test log-------
+cpp: 4.1 by 100 tests
+nanvm: 24.98 by 100 tests
+py: 71.95 by 100 tests
+js: 36.14 by 100 tests
+-------test log-------
+cpp: 4.06 by 100 tests
+nanvm: 21.24 by 100 tests
+py: 70.49 by 100 tests
+js: 35.93 by 100 tests
+-------test log-------
+cpp: 4.09 by 100 tests
+nanvm: 21.99 by 100 tests
+py: 71.15 by 100 tests
+js: 39.71 by 100 tests
+-------test log-------
+cpp: 4.02 by 100 tests
+nanvm: 18.45 by 100 tests
+py: 70.17 by 100 tests
+js: 37.75 by 100 tests
+-------test log-------
+cpp: 4.04 by 100 tests
+nanvm: 21.29 by 100 tests
+py: 71.27 by 100 tests
+js: 36.85 by 100 tests
+-------test log-------
+cpp: 4.11 by 100 tests
+nanvm: 19.12 by 100 tests
+py: 67.56 by 100 tests
+js: 35.53 by 100 tests
+-------test log-------
+cpp: 4.04 by 100 tests
+nanvm: 21.18 by 100 tests
+py: 68.78 by 100 tests
+js: 35.35 by 100 tests
+-------test log-------
+cpp: 4.05 by 100 tests
+nanvm: 19.41 by 100 tests
+py: 68.03 by 100 tests
+js: 36.72 by 100 tests
+-------test log-------
+cpp: 4.04 by 100 tests
+nanvm: 18.15 by 100 tests
+py: 68.16 by 100 tests
+js: 34.9 by 100 tests

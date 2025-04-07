@@ -76,6 +76,8 @@ namespace Virtual {
     Instruction_READ,  // read used stream
     Instruction_OPEN,  // open file as destinator
 
+    Instruction_LM,
+
     Instruction_PUTC,
     Instruction_PUTI,
     Instruction_PUTS,
@@ -83,7 +85,7 @@ namespace Virtual {
     Instruction_MOVRDI,
   };
 
-  #define VIRTUAL_VERSION (Instruction_PUTS*100)+0x49
+  #define VIRTUAL_VERSION (Instruction_PUTS*100)+0x55
 
 
   struct CodeManifest {
@@ -125,6 +127,8 @@ namespace Virtual {
     Instruction* playground;
     size_t data_size = 0;
     byte* data = nullptr;
+    size_t adata_count = 0;
+    byte* adata = nullptr;
     size_t labels_size = 0;
     LabelInfo* labels;
     CodeManifestExtended cme;
@@ -150,7 +154,6 @@ namespace Virtual {
 
 #pragma region FILE
 
-
 // stoped development
   void Code_SaveFromFile(const Code& code, const std::filesystem::path& path) {
     std::ofstream file(path, std::ios::out | std::ios::binary);
@@ -162,10 +165,13 @@ namespace Virtual {
     mew::writeBytes(file, mflags, sizeof(uint));
     mew::writeBytes(file, code.capacity, sizeof(uint));
     mew::writeBytes(file, code.data_size, sizeof(uint));
+    mew::writeBytes(file, code.adata_count, sizeof(uint));
     mew::writeBytes(file, code.labels_size, sizeof(uint));
-    mew::writeBytes(file, code.cme.libs.size(), sizeof(uint));
+    uint libsSize = static_cast<uint>(code.cme.libs.size());
+    mew::writeBytes(file, libsSize, sizeof(uint));
     mew::writeSeqBytes(file, code.playground, code.capacity);
     mew::writeSeqBytes(file, code.data, code.data_size);
+    mew::writeSeqBytes(file, code.adata, code.adata_count);
     mew::writeSeqBytes(file, code.labels, code.labels_size);
     mew::writeSeqBytes(file, code.cme.libs.begin(), code.cme.libs.size());
     file.close();
@@ -192,10 +198,10 @@ namespace Virtual {
     }
     /** MANIFEST */
     Code* code = new Code();
-    VM_MANIFEST_FLAGS mflags = (VM_MANIFEST_FLAGS)mew::readInt4Bytes(file);
+    code->cme.flags = (VM_MANIFEST_FLAGS)mew::readInt4Bytes(file);
     code->capacity = mew::readInt4Bytes(file);
     code->data_size = mew::readInt4Bytes(file);
-    code->cme.flags = mflags;
+    code->adata_count = mew::readInt4Bytes(file);
     code->labels_size = mew::readInt4Bytes(file);
     uint libs_size = mew::readInt4Bytes(file);
     /* code */
@@ -208,13 +214,21 @@ namespace Virtual {
     for (int i = 0; i < code->data_size; i++) {
       file >> ((byte*)code->data)[i];
     }
-    if (mflags.has_debug) {
+    if (code->cme.flags.has_debug) {
       code->cme.size = mew::readInt4Bytes(file); 
       for (int i = 0; i < code->cme.size; i++) {
         CodeDebugInfo di; mew::readBytes(file, di);
         code->cme.debug.push(di);
       }
     }
+
+    // adata
+    code->adata = new byte[code->adata_count];
+    for (int i = 0; i < code->data_size; i++) {
+      file >> ((byte*)code->adata)[i];
+    }
+
+    // labels
     code->labels = new LabelInfo[code->labels_size];
     for (int i = 0; i < code->labels_size; i++) {
       LabelInfo li; mew::readBytes(file, li);
@@ -235,7 +249,7 @@ namespace Virtual {
     }
     return Code_LoadFromFile(__path);
   }
-
+#pragma region VM
   enum VM_Status: byte {
     VM_Status_Panding = 0,
     VM_Status_Execute = 1 << 1,
@@ -251,8 +265,7 @@ namespace Virtual {
     VM_TestStatus_EqualMore  = VM_TestStatus_Equal | VM_TestStatus_More,
     VM_TestStatus_EqualLess  = VM_TestStatus_Equal | VM_TestStatus_Less,
   };
-
-#pragma region VM
+  
 
   enum VM_flags {
     None = 0,
@@ -326,8 +339,23 @@ namespace Virtual {
         default: return nullptr;
       }
     }
-  };                                            // 300byte 
+  };                                            // 368byte 
 #pragma pack(pop)
+
+  struct Code_AData {
+    size_t size;
+  };
+
+  size_t Code_CountAData(Code& code) {
+    if (code.adata == nullptr) { return 0; }
+    Code_AData* adata = (Code_AData*)code.adata;
+    size_t size_couter = 0;
+    for (int i = 0; i < code.adata_count; ++i) {
+      size_couter += adata[i].size;
+    }
+    return size_couter;
+  }
+  
   void a() {
     sizeof(VirtualMachine);
   }
@@ -353,7 +381,8 @@ namespace Virtual {
   }
 
   void Alloc(VirtualMachine& vm, Code& code) {
-    size_t size = __VM_ALIGN(code.capacity+code.data_size, VM_ALLOC_ALIGN);
+    size_t adata_count = Code_CountAData(code);
+    size_t size = __VM_ALIGN(code.capacity+code.data_size+adata_count, VM_ALLOC_ALIGN);
     if ((size - code.capacity - code.data_size) <= 0) {
       size += VM_MINHEAP_ALIGN;
     }
@@ -370,6 +399,7 @@ namespace Virtual {
 
   void LoadMemory(VirtualMachine& vm, Code& code) {
     vm.memory = (byte*)code.playground;
+    // todo load from .nlib file 
     for (int i = 0; i < code.cme.libs.size(); ++i) {
       Code* lib = Code_LoadFromFile(code.cme.libs.at(i));
       vm.libs.push(lib);
@@ -1046,6 +1076,14 @@ namespace Virtual {
     int& a = VM_GetArg(vm).getInt();
     a = mew::wait_char();
   }
+  
+  // 
+  void VM_LM(VirtualMachine& vm) {
+    vm.debug.last_fn = (char*)__func__;
+    auto a = VM_GetArg(vm);
+    auto b = VM_GetArg(vm);
+    a.mov(b);
+  }
 
   void VM_Open(VirtualMachine& vm) {
     vm.debug.last_fn = (char*)__func__;
@@ -1210,6 +1248,9 @@ namespace Virtual {
       case Instruction_OPEN: {
         VM_Open(vm);
       } break;
+      case Instruction_LM: {
+        VM_LM(vm);
+      } break;
       case Instruction_EXIT: {
         vm.status = VM_Status_Ret;
       } break;
@@ -1231,6 +1272,10 @@ namespace Virtual {
     vm.status = VM_Status_Execute;
     if (code.data != nullptr) {
       memcpy(vm.heap, code.data, code.data_size*sizeof(*code.data));
+    }
+    if (code.adata != nullptr) {
+
+      memcpy(vm.heap+code.data_size, code.adata, code.adata_count*sizeof(*code.adata));
     }
     while (vm.begin < vm.end && vm.status != VM_Status_Ret) {
       ++vm.process_cycle; RunLine(vm);
@@ -1353,6 +1398,7 @@ namespace Virtual {
     static const size_t alloc_size = 8;
   private:
     size_t capacity, size, _data_size = 0;
+    mew::stack<size_t> _adatas;
     byte* code = nullptr, *data = nullptr;
   public:
     CodeBuilder(): capacity(alloc_size), size(0), 
@@ -1384,77 +1430,11 @@ namespace Virtual {
       memcpy(data+_data_size, row, size);
       _data_size = __new_size;
     }
-    
-    // friend CodeBuilder& operator+(CodeBuilder& cb, const CodeBuilder& i) {
-    //   size_t __size = i._data_size;
-    //   size_t __rsize = __size;
-    //   if (!cb.data) {
-    //     cb.data = new byte[__rsize];
-    //   } else {
-    //     byte* __new = new byte[cb._data_size+__rsize];
-    //     memcpy(__new, cb.data, cb._data_size);
-    //     byte* __old = cb.data; 
-    //     cb.data = __new;
-    //     free(__old);
-    //   }
-    //   memset(cb.data+cb._data_size, 0, __rsize);
-    //   memcpy(cb.data+cb._data_size, i.data, __rsize);
-    //   cb._data_size += __rsize;
-    //   return cb;
-    // }
-    // friend CodeBuilder& operator+(CodeBuilder& cb, const char* text) {
-    //   size_t __size = strlen(text);
-    //   size_t __rsize = (__size+1)*sizeof(char);
-    //   if (!cb.data) {
-    //     cb.data = new byte[__rsize];
-    //   } else {
-    //     byte* __new = new byte[cb._data_size+__rsize];
-    //     memcpy(__new, cb.data, cb._data_size);
-    //     byte* __old = cb.data; 
-    //     cb.data = __new;
-    //     free(__old);
-    //   }
-    //   memset(cb.data+(cb._data_size*sizeof(char)), 0, __rsize);
-    //   memcpy(cb.data+(cb._data_size*sizeof(char)), text, __rsize);
-    //   cb._data_size += __rsize;
-    //   return cb;
-    // }
-    // friend CodeBuilder& operator+(CodeBuilder& cb, const wchar_t* text) {
-    //   size_t __size = wcslen(text);
-    //   size_t __rsize = (__size+1)*sizeof(wchar_t);
-    //   if (!cb.data) {
-    //     cb.data = new byte[__rsize];
-    //   } else {
-    //     byte* __new = new byte[cb._data_size+__rsize];
-    //     memcpy(__new, cb.data, cb._data_size);
-    //     byte* __old = cb.data; 
-    //     cb.data = __new;
-    //     free(__old);
-    //   }
-    //   memset(cb.data+(cb._data_size*sizeof(wchar_t)), 0, __rsize);
-    //   memcpy(cb.data+(cb._data_size*sizeof(wchar_t)), text, __rsize);
-    //   cb._data_size += __rsize;
-    //   return cb;
-    // }
 
-    // CodeBuilder& operator+=(const wchar_t* text) {
-    //   return (*this)+text;
-    // }
     CodeBuilder& operator+=(const char* text) {
       AddData((byte*)text, strlen(text));
       return *this;
     }
-    // CodeBuilder& operator+=(CodeBuilder& i) {
-    //   return (*this)+i;
-    // }
-    
-    // friend CodeBuilder& operator<<(CodeBuilder& cb, CodeBuilder& i) {
-    //   cb.Upsize(i.capacity);
-    //   memcpy(cb.code+cb.size, i.code, i.capacity);
-    //   cb.size += i.capacity;
-    //   cb += i;
-    //   return cb;
-    // } 
 
     friend CodeBuilder& operator<<(CodeBuilder& cb, byte i) {
       cb.UpsizeIfNeeds(sizeof(i));
@@ -1493,13 +1473,9 @@ namespace Virtual {
       return cb;
     }
 
-    // friend CodeBuilder& operator>>(CodeBuilder& cb, CodeBuilder& i) {
-    //   cb.Upsize(i.capacity);
-    //   memcpy(cb.code+cb.size, i.code, i.capacity);
-    //   cb.size += i.capacity;
-    //   cb += i;
-    //   return cb;
-    // }
+    void push_adata(size_t size) {
+      _adatas.push(size);
+    }
 
     Code* operator*() {
       Code* c = new Code();
@@ -1507,6 +1483,8 @@ namespace Virtual {
       c->playground = (Instruction*)(code);
       c->data_size  = _data_size;
       c->data       = data;
+      c->adata_count = _adatas.size();
+      c->adata      = (byte*)_adatas.copy_data();
       return c;
     }
     Code operator*(int) {
@@ -1515,6 +1493,8 @@ namespace Virtual {
       c.playground  = (Instruction*)code;
       c.data_size   = _data_size;
       c.data        = data;
+      c.adata_count = _adatas.size();
+      c.adata      = (byte*)_adatas.copy_data();
       return c;
     }
 

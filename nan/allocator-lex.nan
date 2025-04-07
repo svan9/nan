@@ -1,0 +1,297 @@
+////////////////////////////////////
+//      file 'allocator.nan'      //
+////////////////////////////////////
+
+expand class std;
+***
+Context{Expand} Context{Class} Context{Text, "std"}
+-> ClassContext{
+	name = "std",
+	generic = nullptr
+	fields = {
+		...
+	}
+}
+***
+
+expand class Allocator<T>;
+***
+ClassContext{
+	name = {"Allocator", path={"std"}}
+	generic = GenericContext {
+		types = {
+			TypeContext{
+				name = "T",
+				clear_name = "T",
+			}
+		}
+	},
+	fields = {
+		...
+	}
+}	
+***
+
+struct {
+	mem_range m_range;
+};
+***
+StructContext{
+	name = {"unnamed", path={"std", "Allocator"}},
+	fields = {
+		DeclareContext{
+			name = "m_range",
+			type = (Context){"mem_range"},
+		}
+	}
+},
+***		
+
+////////////////////////////////////////////////////////////
+This& () @gen { }
+***
+FunctionDeclaration {
+	name = {"unnamed", path={"std", "Allocator"}},
+	args = {},
+	return_type = TypeContext{
+		name = "This&", 
+		clear_name="This",
+		is_reference = true,
+		is_template = true,
+	},
+	flags = {
+		FieldFlag{
+			name = "gen",
+			is_native = true,
+			{native_handler = [&GENERATOR]}
+		}
+	}
+}
+***
+
+////////////////////////////////////////////////////////////
+This& (uint init_size) @gen {
+	Allocate(init_size);
+}
+***
+FunctionDeclaration {
+	name = "unnamed",
+	args = SquareArray{
+		DeclareContext{
+			name = "init_size",
+			type = TypeContext{
+				name = "uint",
+				clear_name = "uint",
+			}
+		}
+	},
+	return_type = TypeContext{
+		name = "This&", 
+		clear_name="This",
+		is_reference = true,
+		is_template = true,
+	},
+	flags = {
+		FieldFlag{
+			name = "gen",
+			is_native = true,
+			{native_handler = [&GENERATOR]}
+		}
+	}
+	content = {
+		Line{
+			FunctionCall{
+				name = "Allocate",
+				args = SquareArray{
+					DeclareContext{
+						name = "init_size",
+						type = TypeContext{
+							name = "uint",
+							clear_name = "uint",
+						}
+					}
+				}
+			}
+		}
+	}
+}
+***
+
+////////////////////////////////////////////////////////////
+void Allocate(uint size) {
+	m_range = mem_range(size*sizeof(T));	
+}
+***
+FunctionDeclaration {
+	name = "Allocate",
+	args = SquareArray{
+		DeclareContext{
+			name = "size",
+			type = TypeContext{
+				name = "uint",
+				clear_name = "uint",
+			}
+		}
+	},
+	return_type = TypeContext{
+		name = "void", 
+		clear_name = "void",
+		is_void = true,
+	},
+	flags = {}
+	content = {
+		Line{
+			AssignContext{
+				name="m_range",
+				value = FunctionCall{
+					name = "mem_range",
+					args = SquareArray{
+						MathContext{
+							OperatorContext{
+								left = Context{size},
+								operator_type = Multiply,
+								right = SizeofContext{T},
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+***
+
+////////////////////////////////////////////////////////////
+void Realloc(uint newsize) {
+	m_range = mem_range(m_range, newsize*sizeof(T));
+}
+***
+FunctionDeclaration {
+	name = "Realloc",
+	args = SquareArray{
+		DeclareContext{
+			name = "newsize",
+			type = TypeContext{
+				name = "uint",
+				clear_name = "uint",
+			}
+		}
+	},
+	return_type = TypeContext{
+		name = "void", 
+		clear_name = "void",
+		is_void = true,
+	},
+	flags = {}
+	content = {
+		Line{
+			AssignContext{
+				name="m_range",
+				value = FunctionCall{
+					name = "mem_range",
+					args = SquareArray{
+						(Context){m_range},
+						MathContext{
+							OperatorContext{
+								left = Context{size},
+								operator_type = Multiply,
+								right = SizeofContext{T},
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+***
+
+////////////////////////////////////////////////////////////
+void Free() @destructor {
+	free(m_range);
+	drop this;
+}
+***
+FunctionDeclaration {
+	name = "Free",
+	flags = {
+		FieldFlag{
+			name = "destructor",
+			is_native = true,
+			{native_handler = [&DESTRUCTOR]}
+		}
+	},
+	args = {},
+	return_type = TypeContext{
+		name = "void", 
+		clear_name = "void",
+		is_void = true,
+	},
+	flags = {}
+	content = {
+		Line{
+			FunctionCall{
+				name = "free",
+				args = SquareArray{
+					(Context){m_range}
+				}
+			}
+		},
+		Line{
+			LROperatorNamedContext{
+				name = "drop",
+				value =	(Context){this}
+			}
+		}
+	}
+}
+***
+
+////////////////////////////////////////////////////////////
+uint Size() {
+	return sizeof(T, m_range);
+}
+***
+FunctionDeclaration {
+	name = "Size",
+	flags = {},
+	args = {},
+	return_type = TypeContext{
+		name = "uint", 
+		clear_name = "uint",
+	},
+	flags = {}
+	content = {
+		Line{
+			SizeofContext2{
+				type_name = (Context){T},
+				memory_range = (RangeContext){m_range},
+			}
+		},
+	}
+}
+***
+
+narrow Allocator<T>;
+*** Close Class Declaration ***
+
+using default Allocator<byte>;
+***
+UsingContext{
+	is_default = true,
+	expression = ExpressionContext{
+		{generic_expression={
+			name = NameContext{
+				name = "Allocator",
+				path = {"std"},
+			},
+			types = {
+				TypeContext{
+					name = "byte",
+					clear_name = "byte",
+				}
+			}
+		}}
+	}
+}
+***

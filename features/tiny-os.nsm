@@ -1,0 +1,29 @@
+entry __start
+
+data da data_buffer[256]
+
+__start:
+_readline:
+	push data_buffer
+	push 0
+_readline_c1:
+	getch r1
+	push r1
+	push 0xA
+	test
+	pop
+	jem _readline_end
+	inc (rdi-4)
+	lm (rdi-12) (rdi-4)
+	inc (rdi-12)
+	push 256
+	test
+	jem _readline_end
+	pop
+_readline_end:
+	ret
+c1:
+	jmp c1
+end:
+	push 0
+	ret
