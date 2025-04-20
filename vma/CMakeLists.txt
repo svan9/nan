@@ -16,9 +16,8 @@ target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_SOURCE_DIR}/include")
 set_target_properties(${PROJECT_NAME} PROPERTIES COMMON_LANGUAGE_RUNTIME "" VS_INTERFACE_NATVIS_FILE  "${CMAKE_BINARY_DIR}/mewlib/mew.natvis")
 
 find_package(OpenMP)
-
 # if(OpenMP_CXX_FOUND AND RELEASE)
-  target_link_libraries(${PROJECT_NAME} PUBLIC OpenMP::OpenMP_CXX -static-libgcc -static-libstdc++ -O3 -static -pthread)
+  target_link_libraries(${PROJECT_NAME} PUBLIC ZLIB::ZLIB OpenMP::OpenMP_CXX -static-libgcc -static-libstdc++ -O3 -static -pthread)
 # endif()
 
 

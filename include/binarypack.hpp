@@ -4,6 +4,7 @@
 #ifndef ZPIPE_H
 #define ZPIPE_H
 #define SET_BINARY_MODE(file)
+#endif
 #include <iostream>
 #include <cstring>
 #include <cassert>

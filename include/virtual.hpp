@@ -114,7 +114,7 @@ namespace Virtual {
     size_t size;
     mew::stack<CodeDebugInfo> debug;
     mew::stack<const char*> libs;
-    mew::stack<FuncInfo, 8U> procs;
+    mew::stack<FuncInfo> procs;
   };
   
   struct LabelInfo {
@@ -312,13 +312,13 @@ namespace Virtual {
       byte in_neib_ctx: 1 = false;
     } flags;                                    // 1byte
     byte _pad0[1];
-    mew::stack<uint, 8U> stack;                 // 24byte
+    mew::stack<uint, mew::MidAllocator<uint>> stack;                 // 24byte
     size_t rdi = 0;
-    mew::stack<byte *, 8U> begin_stack;         // 24byte
-    mew::stack<mew::_dll_hinstance, 8U> hdlls;  // 24byte
-    mew::stack<mew::_dll_farproc, 8U> hprocs;   // 24byte
-    mew::stack<FuncInfo, 8U> procs;             // 24byte
-    mew::stack<Code*, 8U> libs;                 // 24byte
+    mew::stack<byte *, mew::MidAllocator<byte*>> begin_stack;        // 24byte
+    mew::stack<mew::_dll_hinstance, mew::MidAllocator<mew::_dll_hinstance>> hdlls;  // 24byte
+    mew::stack<mew::_dll_farproc, mew::MidAllocator<mew::_dll_farproc>> hprocs;   // 24byte
+    mew::stack<FuncInfo, mew::MidAllocator<FuncInfo>> procs;             // 24byte
+    mew::stack<Code*> libs;                 // 24byte
     size_t process_cycle = 0;
 
     byte* getRegister(VM_RegType rt, byte idx, size_t* size = nullptr) {
@@ -351,7 +351,8 @@ namespace Virtual {
     Code_AData* adata = (Code_AData*)code.adata;
     size_t size_couter = 0;
     for (int i = 0; i < code.adata_count; ++i) {
-      size_couter += adata[i].size;
+      auto& local = adata[i];
+      size_couter += local.size;
     }
     return size_couter;
   }
@@ -398,7 +399,7 @@ namespace Virtual {
   }
 
   void LoadMemory(VirtualMachine& vm, Code& code) {
-    vm.memory = (byte*)code.playground;
+    memcpy(vm.memory, code.playground, code.capacity);
     // todo load from .nlib file 
     for (int i = 0; i < code.cme.libs.size(); ++i) {
       Code* lib = Code_LoadFromFile(code.cme.libs.at(i));
@@ -785,8 +786,6 @@ namespace Virtual {
         memcpy(&offset, vm.begin, sizeof(int)); vm.begin += sizeof(int);
         VM_ARG arg;
         byte* num = vm.stack.rat(-offset);
-        int __num = *(int*)num;
-        (void)__num;
         arg.data = num;
         arg.type = type;
         return arg;
@@ -1082,7 +1081,7 @@ namespace Virtual {
     vm.debug.last_fn = (char*)__func__;
     auto a = VM_GetArg(vm);
     auto b = VM_GetArg(vm);
-    a.mov(b);
+    VM_ARG::mov(a, b);
   }
 
   void VM_Open(VirtualMachine& vm) {
@@ -1274,8 +1273,7 @@ namespace Virtual {
       memcpy(vm.heap, code.data, code.data_size*sizeof(*code.data));
     }
     if (code.adata != nullptr) {
-
-      memcpy(vm.heap+code.data_size, code.adata, code.adata_count*sizeof(*code.adata));
+      memset(vm.heap+code.data_size, 0, vm.capacity-(code.capacity+code.data_size));
     }
     while (vm.begin < vm.end && vm.status != VM_Status_Ret) {
       ++vm.process_cycle; RunLine(vm);
@@ -1483,7 +1481,7 @@ namespace Virtual {
       c->playground = (Instruction*)(code);
       c->data_size  = _data_size;
       c->data       = data;
-      c->adata_count = _adatas.size();
+      c->adata_count = _adatas.count();
       c->adata      = (byte*)_adatas.copy_data();
       return c;
     }
@@ -1493,7 +1491,7 @@ namespace Virtual {
       c.playground  = (Instruction*)code;
       c.data_size   = _data_size;
       c.data        = data;
-      c.adata_count = _adatas.size();
+      c.adata_count = _adatas.count();
       c.adata      = (byte*)_adatas.copy_data();
       return c;
     }

@@ -242,6 +242,8 @@ static const char* pop_err_msg =
 		const char* value = nullptr;
 		void* context;
 
+		~Token() {}
+
 		void print() {
 			const char* str = stringify_tokentype(type);
 			if (str == nullptr) {
@@ -264,7 +266,7 @@ static const char* pop_err_msg =
 		const bool has_normal_err;
 
 		void _fill_simple() {
-			for (int i = 0; i < lines.size(); ++i) {
+			for (int i = 0; i < lines.count(); ++i) {
 				mew::stack<Token> token_line;
 				const char* line = lines[i];
 				TokenRow str_row(line);
@@ -293,10 +295,10 @@ static const char* pop_err_msg =
 						token_line.push(tk);
 					}
 				}
-				if (token_line.size() == 0) {
+				if (token_line.count() == 0) {
 					continue;
 				}
-				token_row.push(token_line.copy());
+				token_row.push(token_line);
 				if (is_comment) {
 					continue;
 				}
@@ -349,7 +351,7 @@ static const char* pop_err_msg =
 			| 	|	number
 			| 	|	string
 		*/
-		Lexer(const char* str, const char* file_name = "local", bool has_normal_err = false)
+		Lexer(const char* str, const char* file_name = "local", bool has_normal_err = true)
 			: has_normal_err(has_normal_err), file(file_name) 
 		{
 			std::vector<char> c;
@@ -382,7 +384,7 @@ static const char* pop_err_msg =
 		Parser(Lexer& lexer): lexer(lexer) {parse();}
 
 		bool same_type_sequence(mew::stack<Token>& row, size_t start, std::initializer_list<TokenType> types) {
-			if (row.size()-start > types.size()) return false;
+			if (row.count()-start > types.size()) return false;
 			auto begin = types.begin();
 			for (int i = 0; i < types.size(); ++i) {
 				auto tkt = begin[i];
@@ -393,12 +395,12 @@ static const char* pop_err_msg =
 
 		void parse() {
 			int x, y;
-			#pragma omp parallel for \
-				default(shared) private(x, y) \
-				schedule(static, 4)
-			for (x = 0; x < lexer.token_row.size(); ++x) {
+			// #pragma omp parallel for \
+			// 	default(shared) private(x, y) \
+			// 	schedule(static, 4)
+			for (x = 0; x < lexer.token_row.count(); ++x) {
 				auto& line = lexer.token_row[x];
-				for (y = 0; y < line.size(); ++y) {
+				for (y = 0; y < line.count(); ++y) {
 					auto& tk = line[y];
 					bool is_rdioffset = same_type_sequence(line, y, {
 						TokenType::RoundOpenBracket, TokenType::Text, TokenType::Minus, TokenType::Number, TokenType::RoundCloseBracket
@@ -447,8 +449,14 @@ static const char* pop_err_msg =
 		bool err_assert(bool expr, const char* msg) {
 			if (expr) { return false; }
 			if (lexer.has_normal_err && nonull(first)) {
+			#if DEBUG
 				size_t line = ((Contexts::DefaultTokenContext*)first->context)->line_idx+1;
 				printf("Error at (%s:%llu) %s\n", lexer.file, line, msg);
+				MewNot();
+			#else
+				size_t line = ((Contexts::DefaultTokenContext*)first->context)->line_idx+1;
+				printf("Error at (%s:%llu) %s\n", lexer.file, line, msg);
+			#endif
 			} else {
 				printf("Error: %s\n", msg);
 			}
@@ -782,11 +790,11 @@ static const char* pop_err_msg =
 
 		void compile() {
 			builder.WaitEntry();
-			for (int i = 0; i < lexer.token_row.size(); ++i) {
+			for (int i = 0; i < lexer.token_row.count(); ++i) {
 				if (__cof == CompileOutFlags::Error) return;
 				auto& line = lexer.token_row[i];
-				if (line.size() == 0) { continue; }
-				size_t argc = line.size()-1;
+				if (line.count() == 0) { continue; }
+				size_t argc = line.count()-1;
 				auto first = line[0];
 				this->first = &first;
 				switch (first.type) {
@@ -794,10 +802,10 @@ static const char* pop_err_msg =
 					case TokenType::Data: {
 						auto& arg1 = line[1];
 						if (arg1.type == TokenType::DB) {
-							this->db_data(line[2], line[3], argc);
+							this->db_data(line[2], line[3], argc-1);
 						}else
 						if (arg1.type == TokenType::DA) {
-							this->da_data(line[2], line[3], argc);
+							this->da_data(line[2], line[3], argc-1);
 						}
 					} break;
 					case TokenType::Entry: this->_entry(line[1], argc); break;
@@ -861,7 +869,7 @@ static const char* pop_err_msg =
 		return comp.__cof;
 	}
 
-	namespace Test {
+	namespace Tests {
 		void test_lexer(){
 			const char* str = 
 			"entry __start\n"
@@ -887,8 +895,11 @@ static const char* pop_err_msg =
 			Compiler comp(lex);
 			// lex.print();
 			Code* code = comp.gen_code();
-			Virtual::Execute(*code);
+			printf("--- SAVE CODE ---\n");
 			Virtual::Code_SaveFromFile(*code, "./temp.nb");
+			printf("--- EXECUTE FROM LOCAL ---\n");
+			Virtual::Execute(*code);
+			printf("\n--- EXECUTE FROM FILE ---\n");
 			Virtual::Execute("./temp.nb");
 		}
 	};

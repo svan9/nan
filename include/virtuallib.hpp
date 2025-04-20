@@ -268,7 +268,7 @@ namespace Virtual::Lib {
         return Range{0, size};
       }
       Range rgx{0, size};
-      for (int i = global_range.start; i < global_range.end; i) {
+      for (int i = global_range.start; i < global_range.end; ++i) {
         if (rgx < global_range && Exist(rgx)) {
           uses.push_back(rgx);
           return uses.back();
@@ -402,7 +402,7 @@ namespace Virtual::Lib {
     ////////////////////////////////////////////////////////////
     Arena::Range find_var(std::string name) {
       auto _v = _vars.find(name);
-      if (_v != _vars.end()) {
+      if (_v == _vars.end()) {
         auto f_ = _adatas.find(name);
         MewUserAssert(f_ != _adatas.end(), "undefined");
         return f_->second;
@@ -771,7 +771,7 @@ namespace Virtual::Lib {
     ////////////////////////////////////////////////////////////
     Builder& AddDataAfter(std::string name, size_t size) {
       (*actual_builder).push_adata(size);
-      auto range = _aarena.Alloc(size);
+      auto range = _aarena.Alloc_s(size);
       _adatas.insert({name, range});
       return *this;
     }

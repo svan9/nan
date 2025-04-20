@@ -8,15 +8,16 @@
 #include "asmlib.hpp"
 #include "shell.hpp"
 #include "binarypack.hpp"
+#include "mewcod.hpp"
 
 #pragma pack(push, 1)
 
-namespace nan::compiler {
+namespace compiler::nan {
 	enum struct TokenType {
 		// simple type
 		Undefined,
 		None, String, Number, Text,	Colon, Dot, Comma, Semicolon, DoubleColon,
-		Float, Double, Int, Char, String, ETC,
+		Float, Double, Int, Char, ETC,
 		Use, Extern, Expand, Narrow, Class, Struct, Entry,
 		If, Else, Ret, Flag,
 		RoundArray, SquareArray, TriangleArray, Block,
@@ -148,7 +149,7 @@ namespace nan::compiler {
 		/*(token types)*/
 		Undefined,
 		None, String, Number, Text,	Colon, Dot, Comma, Semicolon, DoubleColon,
-		Float, Double, Int, Char, String, ETC,
+		Float, Double, Int, Char, ETC,
 		Use, Extern, Expand, Narrow, Class, Struct, Entry,
 		If, Else, Ret, Flag,
 		RoundArray, SquareArray, TriangleArray, Block,
@@ -326,7 +327,17 @@ namespace nan::compiler {
 		bool is_default: 1 = false;
 		ExpressionContext* expression;
 	};
+
+	typedef mew::cad::Compiler<TokenType>::Token Token;
+
+	bool TokenWatcher(Token& tk) {
+		
+	}
 	
+	void Compile(const char* text, const char* file_name = "local") {
+		mew::cad::Compiler<TokenType> compiler(tokens);
+		auto* lexer = compiler.tokenize(text, TokenWatcher, file_name, true);
+	}
 }
 #pragma pack(pop)
 

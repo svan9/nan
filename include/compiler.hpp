@@ -52,7 +52,7 @@ class Compiler {
 private:
 	const char* rel_cache = ".nan/cache/temp.json";
 	const char* cache = mew::utils::getUserHome(rel_cache);
-	mew::stack<char*, 8U> used_function;
+	mew::stack<char*> used_function;
 	std::unordered_map<std::string, json> named_functions;
 	Builder main_builder;
 	size_t entry;

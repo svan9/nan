@@ -18,9 +18,21 @@ add_subdirectory(vm-test)
 add_subdirectory(opt-test)
 add_subdirectory(opt-m)
 
-
 add_custom_target(copy_bin ALL
 	COMMAND ${CMAKE_COMMAND} -E copy_directory
 	${CMAKE_BINARY_DIR}/bin ${CMAKE_BINARY_DIR}/../build-win
 	COMMENT "Copying bin folder to build-win"
 )
+
+# add_custom_target(copy_zlib ALL
+# 	COMMAND ${CMAKE_COMMAND} -E copy
+# 	${CMAKE_BINARY_DIR}/zlib/libz.dll ${CMAKE_BINARY_DIR}/bin
+# 	COMMENT "Copying bin folder to build-win"
+# )
+
+# add_custom_target(copy_zlibd ALL
+# 	COMMAND ${CMAKE_COMMAND} -E copy
+# 	${CMAKE_BINARY_DIR}/zlib/libzd.dll ${CMAKE_BINARY_DIR}/bin
+# 	COMMENT "Copying bin folder to build-win"
+# )
+

@@ -41,12 +41,6 @@ int main(int argc, char** argv) {
 		printf(HELP_PAGE); exit(0);
 	}
 
-	// auto libs = __args.getStartsWith("-L");
-	// mew::stack<mew::_dll_hinstance, 8U> hdlls;
-	// for (int i = 0; i < libs.size(); i++) {
-	// 	hdlls.push(mew::LoadDll(libs.at(i)));
-	// }
-	
 	const char* path = __args.getNextPath();
 	MewUserAssert(mew::is_exists(path),"path is not exsist");
 	Virtual::VirtualMachine vm;
