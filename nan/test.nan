@@ -1,0 +1,12 @@
+extern void putc(char) @native;
+
+void print(const char* str) {
+	while(*str) {
+		putc(*str++);
+	}
+}
+
+entry {
+	print("hello world\n");
+	ret OK();
+}

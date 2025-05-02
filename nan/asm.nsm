@@ -10,8 +10,8 @@ __start:
 L1:
 	test 
 	jem LE1
-	puti (rdi-4)
-	inc (rdi-4)
+	puti (rdi-8)
+	inc (rdi-8)
 	jmp L1
 LE1:
 	push 0

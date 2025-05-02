@@ -1,0 +1,53 @@
+use std, std::queue;
+using std::console::print;
+
+expand class Coroutine 
+
+static std::queue<#rip> rips;
+static std::queue<{#regs+#stack}> RegNStack;
+
+void Yield() @nonpath { // nonpath function Coroutine::Yield same ::Yield
+	reg8 from_call = #rip_stack-1;
+	rips.push(from_call);
+	RegNStack.push({#regs+#stack});
+	if (!rips.isEmpty()) {
+		{#regs+#stack} = RegNStack.pop();
+		goto (reg8)rips.pop();
+	}
+}
+
+void Coroutine(#func _cor) @nonpath {
+	reg8 from_call = _cor::#rip;
+	rips.push(from_call);
+	RegNStack.push({0});
+}
+
+// void Coroutine(#func _cor, ...args) @nonpath;
+
+narrow class Coroutine
+
+expand Test Coroutine
+
+void Sum1() {
+	int i = 0; 
+	for (i = 0; i < 10; ++i) {
+		Yield();
+		print(i);
+	}
+}
+
+void Sum2() {
+	int i = 10; 
+	for (i = 0; i < 20; ++i) {
+		Yield();
+		print(i);
+	}
+}
+
+void test() @test {
+	Coroutine(sum1);
+	Coroutine(sum2);
+	Yield();
+}
+
+narrow Test Coroutine

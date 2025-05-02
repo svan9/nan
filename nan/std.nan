@@ -1,0 +1,150 @@
+expand class std @nonpath
+
+trait numeric = int + float + double + char + boolean;
+type byte = unsigned char;
+trait unsigned = unsigned numeric;
+type bool = boolean;
+type str = const char*
+type i8 = char;
+type i16 = char * 2;
+type i32 = char * 4;
+type i64 = char * 8;
+type u8 = byte;
+type u16 = byte * 2;
+type u32 = byte * 4;
+type u64 = byte * 8;
+
+expand class string
+
+struct {
+	u64 size;
+	str data;
+};
+
+This&() @gen {
+	size = 0;
+	data = null;
+}
+
+This&(str s) @gen {
+	size = strlen(s);
+	data = s;
+}
+
+This&(string s) @gen {
+	size = s.size;
+	data = s.data;
+}
+
+This&(string s, u64 size) @gen {
+	size = size;
+	data = s.data;
+}
+
+narrow class string
+
+expand class ops @nonpath
+
+// @autogen - template function generates with all includes types 
+// @nonpath - function globalied function
+// @right|@left - function-operator with prefix and suffix operator
+
+template<numeric T>
+T operator+ (T a, T b) @nonpath @autogen {
+	ret bin{add $a $b};
+}
+template<numeric T>
+T operator- (T a, T b) @nonpath @autogen {
+	ret bin{sub $a $b};
+}
+template<numeric T>
+T operator/ (T a, T b) @nonpath @autogen {
+	ret bin{div $a $b};
+}
+template<numeric T>
+T operator* (T a, T b) @nonpath @autogen {
+	ret bin{mul $a $b};
+}
+template<numeric T>
+T operator++ (T a) @nonpath @autogen {
+	ret bin{inc $a};
+}
+template<numeric T>
+T operator++ (T a) @nonpath @right @autogen {
+	T _tmp_a{a}; ++a;
+	ret _tmp_a;
+}
+template<numeric T>
+T operator-- (T a) @nonpath @autogen {
+	ret bin{dec $a};
+}
+template<numeric T>
+T operator-- (T a) @nonpath @right @autogen {
+	T _tmp_a{a}; --a;
+	ret _tmp_a;
+}
+template<numeric T>
+bool operator>(T a, T b) @nonpath @autogen {
+	bin{test $a $b};
+	ret (bool)#vm::test::more;
+}
+template<numeric T>
+bool operator<(T a, T b) @nonpath @autogen {
+	bin{test $a $b};
+	ret (bool)#vm::test::less;
+}
+template<numeric T>
+bool operator==(T a, T b) @nonpath @autogen {
+	bin{test $a $b};
+	ret (bool)#vm::test::equal;
+}
+template<numeric T>
+bool operator>=(T a, T b) @nonpath @autogen {
+	bin{test $a $b};
+	ret (bool)#vm::test::equal | #vm::test::more;
+}
+template<numeric T>
+bool operator<=(T a, T b) @nonpath @autogen {
+	bin{test $a $b};
+	ret (bool) #vm::test::equal | #vm::test::less;
+}
+template<numeric T>
+T operator& (T a) @nonpath @autogen {
+	ret bin{and $a $b};
+}
+template<numeric T>
+T operator| (T a) @nonpath @autogen {
+	ret bin{or $a $b};
+}
+template<numeric T>
+T operator^ (T a) @nonpath @autogen {
+	ret bin{xor $a $b};
+}
+template<numeric T>
+T operator~ (T a) @nonpath @autogen {
+	ret bin{not $a};
+}
+template<numeric T>
+T operator<< (T a, T b) @nonpath @autogen {
+	ret bin{ls $a $b};
+}
+template<numeric T>
+T operator>> (T a, T b) @nonpath @autogen {
+	ret bin{rs $a $b};
+}
+
+str [operator+, operator<<, operator..](str a, str b) @nonpath {
+	str buffer = new((strlen(a)+strlen(b))*sizeof(str)+1);
+	buffer << a;
+	buffer+strlen(a) << b;
+	buffer[-1] = 0;
+	ret buffer;
+}
+
+str operator>>(str a, str b) @nonpath {
+	return b << a;
+}
+
+narrow class ops
+
+narrow class std

@@ -9,6 +9,6 @@
 // #include "asmlib.hpp"	
 #include "shell.hpp"
 #include "binarypack.hpp"
-// #include "nanler.hpp"
+#include "nanler.hpp"
 
 #endif
