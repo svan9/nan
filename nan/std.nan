@@ -14,6 +14,224 @@ type u16 = byte * 2;
 type u32 = byte * 4;
 type u64 = byte * 8;
 
+template<First, Second> 
+struct pair {
+	First first;
+	Second second;
+};
+
+extra pair {
+	@gen => #!default;
+	@gen => #!empty;
+	@copy => #!default;
+	@move => #!default;
+	operator => #!off;
+};
+
+template<T>
+`T new(u64 count) {
+	ret new(count * sizeof(T));
+}
+
+template<T>
+expand class stack
+
+struct {
+	First* data;
+	u64 size;
+	u64 capacity;
+}
+
+This&() @gen {
+	size = 0;
+	capacity = 8;
+	data = new<T>(capacity);
+}
+
+This&(u64 size) @gen {
+	size = 0;
+	capacity = size;
+	data = new<T>(capacity);
+}
+
+u64 normalize_index(i64 index) {
+	ret (size + index) % size;
+}
+
+***
+	transform argument 'index' with function 'normalize_index'
+	> from i64 to u64
+	u64 normalize_index(i64 index)
+	normalize_index(index) -> u64 index
+	same
+	i64 index
+***
+T& operator[](u64 normalize_index(i64 index)) {
+	if (index >= size) {
+		throw "Index out of range";
+	}
+	ret data[index];
+}
+
+Result<T&, err> operator[](u64 normalize_index(i64 index)) @safe {
+	if (index >= size) {
+		ret ERR("Index out of range");
+	}
+	ret OK(data[index]);
+}
+T& at(u64 normalize_index(i64 index)) {
+	if (index >= size) {
+		throw "Index out of range";
+	}
+	ret data[index];
+}
+
+Result<T&, err> at(u64 normalize_index(i64 index)) @safe {
+	if (index >= size) {
+		ret ERR("Index out of range");
+	}
+	ret OK(data[index]);
+}
+
+void erase(u64 normalize_index(i64 index)) {
+	if (index >= size) {
+		throw "Index out of range";
+	}
+	for (u64 i = index; i < size - 1; i++) {
+		data[i] = data[i + 1];
+	}
+	size--;
+}
+
+Result<, err> erase(u64 normalize_index(i64 index)) @safe {
+	if (index >= size) {
+		ret ERR("Index out of range");
+	}
+	for (u64 i = index; i < size - 1; i++) {
+		data[i] = data[i + 1];
+	}
+	size--;
+	ret OK();
+}
+
+void erase(u64 normalize_index(i64 start), u64 count) {
+	if (start >= size) {
+		throw "Index out of range";
+	}
+	if (start + count > size) {
+		count = size - start;
+	}
+	for (u64 i = start; i < size - count; i++) {
+		data[i] = data[i + count];
+	}
+	size -= count;
+}
+
+Result<, err> erase(u64 normalize_index(i64 start), u64 count) @safe {
+	if (start >= size) {
+		ret ERR("Index out of range");
+	}
+	if (start + count > size) {
+		count = size - start;
+	}
+	for (u64 i = start; i < size - count; i++) {
+		data[i] = data[i + count];
+	}
+	size -= count;
+	ret OK();
+}
+
+void push(T value) {
+	if (size == capacity) {
+		capacity *= 2;
+		data = new<T>(capacity);
+	}
+	data[size] = value;
+	size++;
+}
+
+Result<, err> push(T value) @safe {
+	if (size == capacity) {
+		capacity *= 2;
+		data = new<T>(capacity);
+	}
+	data[size] = value;
+	size++;
+	ret OK();
+}
+
+void pop() {
+	if (size == 0) {
+		throw "Stack is empty";
+	}
+	size--;
+}
+Result<, err> pop() @safe {
+	if (size == 0) {
+		ret ERR("Stack is empty");
+	}
+	size--;
+	ret OK();
+}
+
+T top() {
+	if (size == 0) {
+		throw "Stack is empty";
+	}
+	ret data[size - 1];
+}
+Result<T&, err> top() @safe {
+	if (size == 0) {
+		ret ERR("Stack is empty");
+	}
+	ret OK(data[size - 1]);
+}
+void clear() {
+	size = 0;
+}
+
+narrow class stack
+
+template<First, Second>
+expand class map
+
+struct {
+	stack<pair<First, Second>> data;
+};
+
+void insert(First key, Second value) @gen {
+	pair<First, Second> p;
+	p.first = key;
+	p.second = value;
+	data.push(p);
+}
+
+void insert(pair<First, Second>&& p) @gen {
+	data.push(p);
+}
+
+void erase(First key) @gen {
+	for (int i = 0; i < data.size(); i++) {
+		if (data[i].first == key) {
+			data.erase(i);
+			break;
+		}
+	}
+}
+
+Second& get(First key) @gen {
+	for (int i = 0; i < data.size(); i++) {
+		if (data[i].first == key) {
+			ret data[i].second;
+		}
+	}
+	ret null; // null can be a reference 
+}
+
+void clear() @gen {
+	data.clear();
+}
+
 expand class string
 
 struct {
