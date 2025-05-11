@@ -7,17 +7,17 @@ static std::queue<#rip> rips;
 static std::queue<{#regs+#stack}> RegNStack;
 
 void Yield() @nonpath { // nonpath function Coroutine::Yield same ::Yield
-	reg8 from_call = #rip_stack-1;
+	reg16 from_call = #rip_stack-1;
 	rips.push(from_call);
 	RegNStack.push({#regs+#stack});
 	if (!rips.isEmpty()) {
 		{#regs+#stack} = RegNStack.pop();
-		goto (reg8)rips.pop();
+		goto (reg16)rips.pop();
 	}
 }
 
 void Coroutine(#func _cor) @nonpath {
-	reg8 from_call = _cor::#rip;
+	reg16 from_call = _cor::#rip;
 	rips.push(from_call);
 	RegNStack.push({0});
 }
