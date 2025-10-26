@@ -1,6 +1,12 @@
 expand class std @nonpath
 
+type string = const? char*;
+
 trait numeric = int + float + double + char + boolean;
+template<T>
+trait printable_static = T::to_string() + T::toString();
+template<T>
+trait printable = printable_static<T> + T::{() -> string} + T::@string;
 type byte = unsigned char;
 trait unsigned = unsigned numeric;
 type bool = boolean;
@@ -267,86 +273,86 @@ expand class ops @nonpath
 // @nonpath - function globalied function
 // @right|@left - function-operator with prefix and suffix operator
 
-template<numeric T>
+template<numeric T> important<1, 2>
 T operator+ (T a, T b) @nonpath @autogen {
 	ret bin{add $a $b};
 }
-template<numeric T>
+template<numeric T> important<1, 2>
 T operator- (T a, T b) @nonpath @autogen {
 	ret bin{sub $a $b};
 }
-template<numeric T>
+template<numeric T> important<3, 4>
 T operator/ (T a, T b) @nonpath @autogen {
 	ret bin{div $a $b};
 }
-template<numeric T>
+template<numeric T> important<3, 4>
 T operator* (T a, T b) @nonpath @autogen {
 	ret bin{mul $a $b};
 }
-template<numeric T>
+template<numeric T> important<1>
 T operator++ (T a) @nonpath @autogen {
 	ret bin{inc $a};
 }
-template<numeric T>
+template<numeric T> important<2>
 T operator++ (T a) @nonpath @right @autogen {
 	T _tmp_a{a}; ++a;
 	ret _tmp_a;
 }
-template<numeric T>
+template<numeric T> important<1>
 T operator-- (T a) @nonpath @autogen {
 	ret bin{dec $a};
 }
-template<numeric T>
+template<numeric T> important<2>
 T operator-- (T a) @nonpath @right @autogen {
 	T _tmp_a{a}; --a;
 	ret _tmp_a;
 }
-template<numeric T>
+template<numeric T> important<1, 2>
 bool operator>(T a, T b) @nonpath @autogen {
 	bin{test $a $b};
 	ret (bool)#vm::test::more;
 }
-template<numeric T>
+template<numeric T> important<1, 2>
 bool operator<(T a, T b) @nonpath @autogen {
 	bin{test $a $b};
 	ret (bool)#vm::test::less;
 }
-template<numeric T>
+template<numeric T> important<1, 2>
 bool operator==(T a, T b) @nonpath @autogen {
 	bin{test $a $b};
 	ret (bool)#vm::test::equal;
 }
-template<numeric T>
+template<numeric T> important<1, 2> 
 bool operator>=(T a, T b) @nonpath @autogen {
 	bin{test $a $b};
 	ret (bool)#vm::test::equal | #vm::test::more;
 }
-template<numeric T>
+template<numeric T> important<1, 2>
 bool operator<=(T a, T b) @nonpath @autogen {
 	bin{test $a $b};
 	ret (bool) #vm::test::equal | #vm::test::less;
 }
-template<numeric T>
+template<numeric T> important<1, 2>
 T operator& (T a) @nonpath @autogen {
 	ret bin{and $a $b};
 }
-template<numeric T>
+template<numeric T> important<1, 2>
 T operator| (T a) @nonpath @autogen {
 	ret bin{or $a $b};
 }
-template<numeric T>
+template<numeric T> important<1, 2>
 T operator^ (T a) @nonpath @autogen {
 	ret bin{xor $a $b};
 }
-template<numeric T>
+template<numeric T> important<1, 2>
 T operator~ (T a) @nonpath @autogen {
 	ret bin{not $a};
 }
-template<numeric T>
+template<numeric T> important<1, 2>
 T operator<< (T a, T b) @nonpath @autogen {
 	ret bin{ls $a $b};
 }
-template<numeric T>
+template<numeric T> important<1, 2>
 T operator>> (T a, T b) @nonpath @autogen {
 	ret bin{rs $a $b};
 }

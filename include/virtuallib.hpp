@@ -1,5 +1,5 @@
-#ifndef _NAN_VIRTUAL_LIB_IMPL
 #define _NAN_VIRTUAL_LIB_IMPL
+#ifndef _NAN_VIRTUAL_LIB_IMPL
 
 #include <concepts>
 #include "virtual.hpp"

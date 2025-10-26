@@ -9,5 +9,12 @@ void foo() @flag {
 
 entry {
 	int number = 10;
+	if (cond_1) {
+		// if condition 
+	} else if (cond_2) {
+		// else condition
+	} final {
+		// after all if blocks
+	}
 	foo();
 }

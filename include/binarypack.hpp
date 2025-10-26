@@ -1,5 +1,5 @@
-#ifndef BINARY_PACKER_HPP
 #define BINARY_PACKER_HPP
+#ifndef BINARY_PACKER_HPP
 
 #ifndef ZPIPE_H
 #define ZPIPE_H
@@ -12,6 +12,8 @@
 #include "mewall.h"
 #include <initializer_list>
 
+int ZEXPORT uncompress(Bytef *dest, uLongf *destLen, const Bytef *source,
+                       uLong sourceLen);
 
 namespace BinaryPack {	
 	struct FileContext {
@@ -28,7 +30,7 @@ namespace BinaryPack {
 	struct CompressedData {
 		size_t compress_factor = 4;
 		size_t size;
-		byte* data;
+		mew::byte* data;
 	};
 	
 	struct PackContext {
@@ -65,7 +67,7 @@ namespace BinaryPack {
 		return (const char*)decompressedData;
 	}
 
-	const char* unpack(byte* data, size_t size) {
+	const char* unpack(mew::byte* data, size_t size) {
 		uLongf decompressedSize = size*4;
 		Bytef* decompressedData = new Bytef[decompressedSize+1];
 		MewAssert(uncompress(decompressedData, &decompressedSize, data, size) == Z_OK);
@@ -99,7 +101,7 @@ namespace BinaryPack {
 			mew::readBytes(file, fctx.size);
 			mew::readBytes(file, fctx.size);
 			mew::readSeqBytes(file, fctx.content, fctx.size);
-			fctx.content = unpack((byte*)fctx.content, fctx.size);
+			fctx.content = unpack((mew::byte*)fctx.content, fctx.size);
 			fctx.size = strlen(fctx.content);
 		}
 		return ctx;
